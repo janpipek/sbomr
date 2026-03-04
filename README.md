@@ -29,6 +29,7 @@ sbomr --help
 - **Dependency List** -- all dependencies with sortable, filterable columns: Name, Version, License, Type, Scope, Group, Description
 - **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; fully collapsible
 - **Detail panel** -- full metadata for the highlighted dependency including a browsable registry URL
+- **Light and dark themes** -- auto-detects terminal background at startup; press `t` to toggle
 - **Colour-coded dependency types** -- green (required), amber (dev), purple (optional), muted (transitive)
 - **Missing license highlighting** -- red italic for components with no declared license
 - **Sorting** -- cycle through Name, Version, License, or Type columns; toggle ascending/descending
@@ -63,6 +64,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `g` / `Home` | Jump to top |
 | `G` / `End` | Jump to bottom |
 | `o` | Open selected package's registry page in browser |
+| `t` | Toggle light / dark theme |
 
 ### Dependency List
 
@@ -108,5 +110,6 @@ src/
 ├── main.rs    Entry point, terminal setup, event loop, keybindings
 ├── app.rs     App state, navigation, sort/filter, collapsible tree
 ├── sbom.rs    CycloneDX JSON parser, data model, purl-to-URL mapping
-└── ui.rs      Rendering, colour palette (Textual-inspired dark theme), layout
+├── theme.rs   Dark/light colour palettes, OS theme detection
+└── ui.rs      Rendering, layout (theme-aware)
 ```
