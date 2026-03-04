@@ -1,6 +1,6 @@
 # sbomr
 
-A terminal UI for browsing [CycloneDX](https://cyclonedx.org/) SBOM files, built with [ratatui](https://ratatui.rs/) and crossterm. Focus is on **licenses** and **dependency types** (required, dev, optional, transitive).
+A terminal UI for browsing [CycloneDX](https://cyclonedx.org/) SBOM files, built with [ratatui](https://ratatui.rs/) and crossterm. Focus is on **licenses**, **dependency types** (required, dev, optional, transitive), and **security insights** (outdated packages, vulnerabilities, hashes, confidence scores).
 
 ## Requirements
 
@@ -26,17 +26,22 @@ sbomr --help
 
 ## Features
 
-- **Dependency List** -- all dependencies with sortable, filterable columns: Name, Version, License, Type, Scope, Group, Description
-- **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; fully collapsible
-- **Detail panel** -- full metadata for the highlighted dependency including a browsable registry URL
+- **Dependency List** -- sortable, filterable columns: Name, Version, License, Type, Registry, Scope, Group, Description
+- **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; starts partially collapsed
+- **Metadata tab** -- SBOM provenance (spec version, serial number, timestamp, tool, lifecycle phase) and component statistics (outdated, no-license, copyleft, vulnerable counts)
+- **JSON tab** -- collapsible tree viewer for the raw SBOM JSON with syntax highlighting; starts expanded to the first level
+- **Detail panel** -- enriched 4-line display: version with outdated indicator (`→ latest`), license with copyleft warning, vulnerability count, confidence score, description, reverse dependencies, purl, VCS/registry URL, and full hash digest
+- **Summary bar** -- at-a-glance counts: total, direct, transitive, outdated, no-license, vulnerable
+- **Security insights** -- outdated detection via `cdx:cargo:latest_version` (with `↑` indicator in table), vulnerability tracking, SHA hash display, evidence confidence scores
 - **Light and dark themes** -- auto-detects terminal background at startup; press `t` to toggle
 - **Colour-coded dependency types** -- green (required), amber (dev), purple (optional), muted (transitive)
 - **Missing license highlighting** -- red italic for components with no declared license
-- **Sorting** -- cycle through Name, Version, License, or Type columns; toggle ascending/descending
+- **Sorting** -- cycle through Name, Version, License, Type, or Registry columns; toggle ascending/descending
 - **Filtering** -- case-insensitive text search against Name, License, or Type with a dedicated input mode
-- **Mouse support** -- clickable tabs, column headers (click to sort, click again to reverse), table rows, tree nodes (click to select, click again to toggle), and scroll wheel navigation
+- **Mouse support** -- clickable tabs, column headers (click to sort, click again to reverse), table rows, tree nodes (click to select, click again to toggle), panel title bars, and scroll wheel navigation
 - **Registry URLs** -- constructs browsable links from purl for 15 package managers and opens them in the default browser
 - **Zebra-striped table** with scrollbar
+- **Panic-safe terminal** -- restores terminal state on panic (no leaked escape sequences)
 
 ### Supported registries (from purl)
 
@@ -70,7 +75,7 @@ npx @cyclonedx/cdxgen -o bom.json
 
 | Key | Action |
 |---|---|
-| `s` | Cycle sort column (Type -> Name -> Version -> License) |
+| `s` | Cycle sort column (Type -> Name -> Version -> License -> Registry) |
 | `S` | Reverse sort direction |
 | `/` | Enter filter input mode |
 | `f` | Cycle filter column (Name -> License -> Type) |
@@ -83,6 +88,16 @@ npx @cyclonedx/cdxgen -o bom.json
 | `Enter` / `Space` | Toggle expand / collapse |
 | `l` / `→` | Expand node |
 | `h` / `←` | Collapse node (or jump to parent) |
+| `e` | Expand all |
+| `c` | Collapse all |
+
+### JSON
+
+| Key | Action |
+|---|---|
+| `Enter` / `Space` | Toggle expand / collapse |
+| `l` / `→` | Expand node |
+| `h` / `←` | Collapse node |
 | `e` | Expand all |
 | `c` | Collapse all |
 
@@ -103,13 +118,22 @@ The app uses three signals from the CycloneDX SBOM to classify each component:
 2. **`cdx:pyproject:group`** property -- gives the exact group name (`"dev"`, `"type"`, etc.)
 3. **Dependency graph analysis** -- a component that is not in root's `dependsOn`, has no dev group, and is not a transitive child of any other component is classified as an **optional extra** (e.g. from `[project.optional-dependencies]`)
 
+## Development
+
+```sh
+just          # fmt + clippy + test
+just build    # release binary
+just install  # cargo install --path .
+just publish  # publish to crates.io
+```
+
 ## Project structure
 
 ```
 src/
-├── main.rs    Entry point, terminal setup, event loop, keybindings
-├── app.rs     App state, navigation, sort/filter, collapsible tree
-├── sbom.rs    CycloneDX JSON parser, data model, purl-to-URL mapping
+├── main.rs    Entry point, terminal setup, panic hook, event loop, keybindings
+├── app.rs     App state, navigation, sort/filter, collapsible tree, JSON tree state
+├── sbom.rs    CycloneDX JSON parser, data model, purl-to-URL mapping, JSON tree builder
 ├── theme.rs   Dark/light colour palettes, OS theme detection
-└── ui.rs      Rendering, layout (theme-aware)
+└── ui.rs      Rendering, layout, syntax highlighting (theme-aware)
 ```
