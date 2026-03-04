@@ -1,4 +1,4 @@
-# sbom-viewer
+# sbomr
 
 A terminal UI for browsing [CycloneDX](https://cyclonedx.org/) SBOM files, built with [ratatui](https://ratatui.rs/) and crossterm. Focus is on **licenses** and **dependency types** (required, dev, optional, transitive).
 
@@ -20,15 +20,20 @@ cargo run --release -- [path/to/bom.json]
 
 Defaults to `bom.json` in the current directory if no path is given.
 
+```sh
+sbomr --help
+```
+
 ## Features
 
-- **Table view** -- all dependencies with sortable, filterable columns: Name, Version, License, Type, Scope, Group, Description
-- **Tree view** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; fully collapsible
+- **Dependency List** -- all dependencies with sortable, filterable columns: Name, Version, License, Type, Scope, Group, Description
+- **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; fully collapsible
 - **Detail panel** -- full metadata for the highlighted dependency including a browsable registry URL
 - **Colour-coded dependency types** -- green (required), amber (dev), purple (optional), muted (transitive)
 - **Missing license highlighting** -- red italic for components with no declared license
 - **Sorting** -- cycle through Name, Version, License, or Type columns; toggle ascending/descending
 - **Filtering** -- case-insensitive text search against Name, License, or Type with a dedicated input mode
+- **Mouse support** -- clickable tabs, column headers (click to sort, click again to reverse), table rows, tree nodes (click to select, click again to toggle), and scroll wheel navigation
 - **Registry URLs** -- constructs browsable links from purl for 15 package managers and opens them in the default browser
 - **Zebra-striped table** with scrollbar
 
@@ -51,7 +56,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | Key | Action |
 |---|---|
 | `q` / `Esc` | Quit |
-| `Tab` | Switch between Table and Tree tabs |
+| `Tab` | Switch between tabs |
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
 | `PgUp` / `PgDn` | Page up / down |
@@ -59,7 +64,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `G` / `End` | Jump to bottom |
 | `o` | Open selected package's registry page in browser |
 
-### Table tab
+### Dependency List
 
 | Key | Action |
 |---|---|
@@ -69,7 +74,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `f` | Cycle filter column (Name -> License -> Type) |
 | `x` | Clear active filter |
 
-### Tree tab
+### Dependency Tree
 
 | Key | Action |
 |---|---|
