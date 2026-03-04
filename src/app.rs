@@ -9,13 +9,15 @@ use ratatui::widgets::TableState;
 pub enum Tab {
     Table,
     Tree,
+    Metadata,
 }
 
 impl Tab {
     pub fn next(self) -> Self {
         match self {
             Tab::Table => Tab::Tree,
-            Tab::Tree => Tab::Table,
+            Tab::Tree => Tab::Metadata,
+            Tab::Metadata => Tab::Table,
         }
     }
 }
@@ -30,6 +32,7 @@ pub enum SortColumn {
     Version,
     License,
     Type,
+    Registry,
 }
 
 #[allow(dead_code)]
@@ -39,6 +42,7 @@ impl SortColumn {
         SortColumn::Version,
         SortColumn::License,
         SortColumn::Type,
+        SortColumn::Registry,
     ];
 
     pub fn label(self) -> &'static str {
@@ -47,6 +51,7 @@ impl SortColumn {
             SortColumn::Version => "Version",
             SortColumn::License => "License",
             SortColumn::Type => "Type",
+            SortColumn::Registry => "Registry",
         }
     }
 
@@ -266,6 +271,7 @@ impl App {
                 .get(self.tree_selected)
                 .filter(|l| !l.bom_ref.is_empty())
                 .map(|l| l.bom_ref.as_str()),
+            Tab::Metadata => None,
         }
     }
 
@@ -504,6 +510,7 @@ impl App {
                     self.tree_selected -= 1;
                 }
             }
+            Tab::Metadata => {}
         }
     }
 
@@ -520,6 +527,7 @@ impl App {
                     self.tree_selected += 1;
                 }
             }
+            Tab::Metadata => {}
         }
     }
 
@@ -532,6 +540,7 @@ impl App {
             Tab::Tree => {
                 self.tree_selected = self.tree_selected.saturating_sub(page_size);
             }
+            Tab::Metadata => {}
         }
     }
 
@@ -546,6 +555,7 @@ impl App {
                 let max = self.tree_len().saturating_sub(1);
                 self.tree_selected = (self.tree_selected + page_size).min(max);
             }
+            Tab::Metadata => {}
         }
     }
 
@@ -553,6 +563,7 @@ impl App {
         match self.active_tab {
             Tab::Table => self.table_state.select(Some(0)),
             Tab::Tree => self.tree_selected = 0,
+            Tab::Metadata => {}
         }
     }
 
@@ -562,6 +573,7 @@ impl App {
                 .table_state
                 .select(Some(self.table_len().saturating_sub(1))),
             Tab::Tree => self.tree_selected = self.tree_len().saturating_sub(1),
+            Tab::Metadata => {}
         }
     }
 
@@ -604,6 +616,11 @@ fn compare_by_column(a: &Component, b: &Component, col: SortColumn) -> std::cmp:
             .dep_type
             .sort_key()
             .cmp(&b.dep_type.sort_key())
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        SortColumn::Registry => a
+            .registry
+            .to_lowercase()
+            .cmp(&b.registry.to_lowercase())
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
     }
 }

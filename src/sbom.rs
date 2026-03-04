@@ -17,11 +17,46 @@ struct RawBom {
     components: Vec<RawComponent>,
     #[serde(default)]
     dependencies: Vec<RawDependency>,
+    #[serde(default)]
+    vulnerabilities: Vec<RawVulnerability>,
+    serial_number: Option<String>,
+    spec_version: Option<String>,
+    #[serde(default)]
+    annotations: Vec<RawAnnotation>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RawMetadata {
     component: Option<RawMetaComponent>,
+    timestamp: Option<String>,
+    tools: Option<RawTools>,
+    #[serde(default)]
+    lifecycles: Vec<RawLifecycle>,
+    #[serde(default)]
+    properties: Vec<RawProperty>,
+}
+
+#[derive(Deserialize)]
+struct RawTools {
+    #[serde(default)]
+    components: Vec<RawToolComponent>,
+}
+
+#[derive(Deserialize)]
+struct RawToolComponent {
+    name: Option<String>,
+    version: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawLifecycle {
+    phase: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawAnnotation {
+    text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -48,6 +83,23 @@ struct RawComponent {
     #[serde(default)]
     properties: Vec<RawProperty>,
     evidence: Option<RawEvidence>,
+    #[serde(default)]
+    hashes: Vec<RawHash>,
+    #[serde(default, rename = "externalReferences")]
+    external_references: Vec<RawExternalRef>,
+}
+
+#[derive(Deserialize)]
+struct RawHash {
+    alg: Option<String>,
+    content: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawExternalRef {
+    #[serde(rename = "type")]
+    ref_type: Option<String>,
+    url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -59,6 +111,7 @@ struct RawEvidence {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawEvidenceIdentity {
+    confidence: Option<f64>,
     concluded_value: Option<String>,
 }
 
@@ -87,6 +140,20 @@ struct RawDependency {
     dep_ref: String,
     #[serde(default)]
     depends_on: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawVulnerability {
+    id: Option<String>,
+    #[serde(default)]
+    affects: Vec<RawAffects>,
+}
+
+#[derive(Deserialize)]
+struct RawAffects {
+    #[serde(rename = "ref")]
+    affects_ref: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +206,18 @@ pub struct Component {
     pub registry: String,
     /// Lock file / source file from evidence (e.g. "Cargo.lock", "uv.lock").
     pub source_file: String,
+    /// Latest available version (from `cdx:cargo:latest_version` etc.), empty if unknown.
+    pub latest_version: String,
+    /// Cryptographic hashes: Vec of (algorithm, hex digest).
+    pub hashes: Vec<(String, String)>,
+    /// VCS (source repository) URL from externalReferences.
+    pub vcs_url: String,
+    /// Evidence confidence score (0.0–1.0), or None if unavailable.
+    pub confidence: Option<f64>,
+    /// Number of known vulnerabilities affecting this component.
+    pub vuln_count: usize,
+    /// Vulnerability IDs affecting this component.
+    pub vuln_ids: Vec<String>,
 }
 
 impl Component {
@@ -152,6 +231,20 @@ impl Component {
 
     pub fn registry_url(&self) -> Option<String> {
         purl_to_url(&self.purl)
+    }
+
+    /// Whether a newer version is known and differs from the current version.
+    pub fn is_outdated(&self) -> bool {
+        !self.latest_version.is_empty() && self.latest_version != self.version
+    }
+
+    /// Whether any license string contains a copyleft identifier.
+    pub fn has_copyleft(&self) -> bool {
+        const COPYLEFT: &[&str] = &["GPL", "AGPL", "LGPL", "MPL", "EUPL", "CPAL", "OSL", "SSPL"];
+        self.licenses.iter().any(|lic| {
+            let upper = lic.to_uppercase();
+            COPYLEFT.iter().any(|cp| upper.contains(cp))
+        })
     }
 }
 
@@ -288,6 +381,22 @@ pub struct TreeNode {
     pub depth: usize,
 }
 
+/// SBOM-level provenance and metadata (not per-component).
+#[derive(Debug, Clone, Default)]
+pub struct SBOMMetadata {
+    pub timestamp: String,
+    pub tool_name: String,
+    pub tool_version: String,
+    pub spec_version: String,
+    pub serial_number: String,
+    pub lifecycle_phase: String,
+    pub annotation: String,
+    /// From metadata.properties, e.g. "Cargo.lock".
+    pub component_src_files: String,
+    /// From metadata.properties, e.g. "cargo".
+    pub component_types: String,
+}
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct SBOMData {
@@ -296,8 +405,10 @@ pub struct SBOMData {
     pub root_ref: String,
     pub components: BTreeMap<String, Component>, // keyed by bom-ref
     pub dep_graph: HashMap<String, Vec<String>>, // ref -> dependsOn refs
+    pub reverse_deps: HashMap<String, Vec<String>>, // ref -> who depends on it
     pub sorted_components: Vec<String>,          // bom-refs sorted for table
     pub tree_roots: Vec<TreeNode>,               // top-level tree categories
+    pub metadata: SBOMMetadata,
 }
 
 // ---------------------------------------------------------------------------
@@ -334,8 +445,61 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
     let content = fs::read_to_string(path)?;
     let raw: RawBom = serde_json::from_str(&content)?;
 
+    // --- SBOM-level metadata ---
+    let meta = raw.metadata.as_ref();
+    let sbom_metadata = {
+        let timestamp = meta.and_then(|m| m.timestamp.clone()).unwrap_or_default();
+        let (tool_name, tool_version) = meta
+            .and_then(|m| m.tools.as_ref())
+            .and_then(|t| t.components.first())
+            .map(|tc| {
+                (
+                    tc.name.clone().unwrap_or_default(),
+                    tc.version.clone().unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default();
+        let lifecycle_phase = meta
+            .and_then(|m| m.lifecycles.first())
+            .and_then(|l| l.phase.clone())
+            .unwrap_or_default();
+        let meta_props = meta.map(|m| m.properties.as_slice()).unwrap_or_default();
+        let component_src_files =
+            get_property(meta_props, "cdx:bom:componentSrcFiles").unwrap_or_default();
+        let component_types =
+            get_property(meta_props, "cdx:bom:componentTypes").unwrap_or_default();
+        let annotation = raw
+            .annotations
+            .first()
+            .and_then(|a| a.text.clone())
+            .unwrap_or_default();
+
+        SBOMMetadata {
+            timestamp,
+            tool_name,
+            tool_version,
+            spec_version: raw.spec_version.clone().unwrap_or_default(),
+            serial_number: raw.serial_number.clone().unwrap_or_default(),
+            lifecycle_phase,
+            annotation,
+            component_src_files,
+            component_types,
+        }
+    };
+
+    // --- Vulnerability index: bom-ref -> list of vuln IDs ---
+    let mut vuln_map: HashMap<String, Vec<String>> = HashMap::new();
+    for v in &raw.vulnerabilities {
+        let vid = v.id.clone().unwrap_or_default();
+        for a in &v.affects {
+            if let Some(r) = &a.affects_ref {
+                vuln_map.entry(r.clone()).or_default().push(vid.clone());
+            }
+        }
+    }
+
     // Root component
-    let meta_comp = raw.metadata.as_ref().and_then(|m| m.component.as_ref());
+    let meta_comp = meta.and_then(|m| m.component.as_ref());
     let root_name = meta_comp
         .and_then(|c| c.name.clone())
         .unwrap_or_else(|| "unknown".into());
@@ -408,6 +572,43 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .and_then(|ev| ev.identity.iter().find_map(|id| id.concluded_value.clone()))
             .unwrap_or_default();
 
+        // Latest version from ecosystem-specific properties
+        let latest_version = get_property(&rc.properties, "cdx:cargo:latest_version")
+            .or_else(|| get_property(&rc.properties, "cdx:python:latest_version"))
+            .unwrap_or_default();
+
+        // Hashes
+        let hashes: Vec<(String, String)> = rc
+            .hashes
+            .iter()
+            .map(|h| {
+                (
+                    h.alg.clone().unwrap_or_default(),
+                    h.content.clone().unwrap_or_default(),
+                )
+            })
+            .filter(|(a, c)| !a.is_empty() && !c.is_empty())
+            .collect();
+
+        // VCS URL from externalReferences
+        let vcs_url = rc
+            .external_references
+            .iter()
+            .find(|r| r.ref_type.as_deref() == Some("vcs"))
+            .and_then(|r| r.url.clone())
+            .unwrap_or_default();
+
+        // Evidence confidence
+        let confidence = rc
+            .evidence
+            .as_ref()
+            .and_then(|ev| ev.identity.first())
+            .and_then(|id| id.confidence);
+
+        // Vulnerabilities
+        let vuln_ids = vuln_map.get(&bom_ref).cloned().unwrap_or_default();
+        let vuln_count = vuln_ids.len();
+
         if !dep_group.is_empty() {
             dev_refs.insert(bom_ref.clone());
         }
@@ -424,10 +625,15 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
                 scope,
                 dep_group,
                 is_direct,
-                // Placeholder — resolved below once all_child_refs is available.
                 dep_type: DepType::Transitive,
                 registry,
                 source_file,
+                latest_version,
+                hashes,
+                vcs_url,
+                confidence,
+                vuln_count,
+                vuln_ids,
             },
         );
     }
@@ -462,6 +668,20 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .then_with(|| ca.name.to_lowercase().cmp(&cb.name.to_lowercase()))
     });
 
+    // Build reverse dependency map (who depends on whom)
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+    for (parent, children) in &dep_graph {
+        if parent == &root_ref {
+            continue; // skip root -> direct, that's already captured
+        }
+        for child in children {
+            reverse_deps
+                .entry(child.clone())
+                .or_default()
+                .push(parent.clone());
+        }
+    }
+
     // Build tree structure
     let tree_roots = build_tree(
         &root_ref,
@@ -478,8 +698,10 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         root_ref,
         components,
         dep_graph,
+        reverse_deps,
         sorted_components,
         tree_roots,
+        metadata: sbom_metadata,
     })
 }
 

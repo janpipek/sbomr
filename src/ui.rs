@@ -3,6 +3,7 @@
 //! Colours are provided by the active [`Theme`] stored in [`App`].
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
@@ -10,7 +11,6 @@ use ratatui::{
         Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, Tabs,
     },
-    Frame,
 };
 
 use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
@@ -37,16 +37,22 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
     let filter_bar_height = if show_filter_bar { 1 } else { 0 };
 
-    let [header_area, tabs_area, filter_area, main_area, detail_area, footer_area] =
-        Layout::vertical([
-            Constraint::Length(3),                 // summary bar
-            Constraint::Length(1),                 // tabs
-            Constraint::Length(filter_bar_height), // filter bar (0 or 1)
-            Constraint::Min(8),                    // table or tree
-            Constraint::Length(5),                 // detail panel
-            Constraint::Length(1),                 // footer keybinds
-        ])
-        .areas(frame.area());
+    let [
+        header_area,
+        tabs_area,
+        filter_area,
+        main_area,
+        detail_area,
+        footer_area,
+    ] = Layout::vertical([
+        Constraint::Length(3),                 // summary bar
+        Constraint::Length(1),                 // tabs
+        Constraint::Length(filter_bar_height), // filter bar (0 or 1)
+        Constraint::Min(8),                    // table or tree
+        Constraint::Length(6),                 // detail panel
+        Constraint::Length(1),                 // footer keybinds
+    ])
+    .areas(frame.area());
 
     draw_summary(frame, app, header_area, &c);
     draw_tabs(frame, app, tabs_area, &c);
@@ -58,6 +64,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     match app.active_tab {
         Tab::Table => draw_table(frame, app, main_area, &c),
         Tab::Tree => draw_tree(frame, app, main_area, &c),
+        Tab::Metadata => draw_metadata(frame, app, main_area, &c),
     }
 
     draw_detail(frame, app, detail_area, &c);
@@ -77,14 +84,26 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         .values()
         .filter(|c| !c.dep_group.is_empty())
         .count();
-    let unique_licenses: std::collections::HashSet<&String> = app
+    let outdated = app
         .sbom
         .components
         .values()
-        .flat_map(|c| c.licenses.iter())
-        .collect();
+        .filter(|c| c.is_outdated())
+        .count();
+    let no_license = app
+        .sbom
+        .components
+        .values()
+        .filter(|c| c.licenses.is_empty())
+        .count();
+    let vulnerable: usize = app
+        .sbom
+        .components
+        .values()
+        .filter(|c| c.vuln_count > 0)
+        .count();
 
-    let text = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             format!("  {} ", app.sbom.root_name),
             Style::default().bold().fg(c.text_bright),
@@ -105,13 +124,38 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         Span::raw("    "),
         Span::styled("Dev/Tool ", Style::default().fg(c.text_muted)),
         Span::styled(format!("{dev}"), Style::default().bold().fg(c.color_dev)),
-        Span::raw("    "),
-        Span::styled("Licenses ", Style::default().fg(c.text_muted)),
-        Span::styled(
-            format!("{} unique", unique_licenses.len()),
-            Style::default().bold().fg(c.text),
-        ),
-    ]);
+    ];
+    if outdated > 0 {
+        spans.extend([
+            Span::raw("    "),
+            Span::styled("Outdated ", Style::default().fg(c.text_muted)),
+            Span::styled(
+                format!("{outdated}"),
+                Style::default().bold().fg(c.color_warning),
+            ),
+        ]);
+    }
+    if no_license > 0 {
+        spans.extend([
+            Span::raw("    "),
+            Span::styled("No License ", Style::default().fg(c.text_muted)),
+            Span::styled(
+                format!("{no_license}"),
+                Style::default().bold().fg(c.color_error),
+            ),
+        ]);
+    }
+    if vulnerable > 0 {
+        spans.extend([
+            Span::raw("    "),
+            Span::styled("Vulnerable ", Style::default().fg(c.text_muted)),
+            Span::styled(
+                format!("{vulnerable}"),
+                Style::default().bold().fg(c.color_error),
+            ),
+        ]);
+    }
+    let text = Line::from(spans);
 
     let block = Block::default()
         .style(Style::default().bg(c.bg_primary))
@@ -127,10 +171,11 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 
 fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
-    let titles = vec![" Dependency List ", " Dependency Tree "];
+    let titles = vec![" Dependency List ", " Dependency Tree ", " Metadata "];
     let selected = match app.active_tab {
         Tab::Table => 0,
         Tab::Tree => 1,
+        Tab::Metadata => 2,
     };
     let tabs = Tabs::new(titles.clone())
         .select(selected)
@@ -144,16 +189,13 @@ fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         .divider(Span::styled("│", Style::default().fg(c.border)));
     frame.render_widget(tabs, area);
 
-    // Record clickable tab areas.
-    // Tab layout: each title is rendered sequentially with a "│" divider between them.
-    // We compute approximate positions based on title widths.
-    let tab_variants = [Tab::Table, Tab::Tree];
+    let tab_variants = [Tab::Table, Tab::Tree, Tab::Metadata];
     let mut x = area.x;
     for (i, title) in titles.iter().enumerate() {
         let w = title.len() as u16;
         let tab_area = Rect::new(x, area.y, w, 1);
         app.click_areas.tabs.push((tab_area, tab_variants[i]));
-        x += w + 1; // +1 for the "│" divider
+        x += w + 1;
     }
 }
 
@@ -175,7 +217,7 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         sort_header_cell("Version", SortColumn::Version, app),
         sort_header_cell("License", SortColumn::License, app),
         sort_header_cell("Type", SortColumn::Type, app),
-        Cell::from("Registry"),
+        sort_header_cell("Registry", SortColumn::Registry, app),
         Cell::from("Scope"),
         Cell::from("Group"),
         Cell::from("Description"),
@@ -206,7 +248,17 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 
             Row::new(vec![
                 Cell::from(comp.name.clone()).style(Style::default().fg(c.text)),
-                Cell::from(comp.version.clone()).style(Style::default().fg(c.text_muted)),
+                Cell::from(Line::from(if comp.is_outdated() {
+                    vec![
+                        Span::styled(&comp.version, Style::default().fg(c.text_muted)),
+                        Span::styled(" ↑", Style::default().fg(c.color_warning)),
+                    ]
+                } else {
+                    vec![Span::styled(
+                        &comp.version,
+                        Style::default().fg(c.text_muted),
+                    )]
+                })),
                 Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.dep_type.label()).style(Style::default().fg(type_color)),
                 Cell::from(if comp.registry.is_empty() {
@@ -245,11 +297,12 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     // The highlight_symbol "▶ " takes 2 chars, so columns start at area.x + 1 + 2.
     // The header row is at area.y + 1 (below the top border).
     {
-        let sortable_columns: [(usize, SortColumn); 4] = [
+        let sortable_columns: [(usize, SortColumn); 5] = [
             (0, SortColumn::Name),
             (1, SortColumn::Version),
             (2, SortColumn::License),
             (3, SortColumn::Type),
+            (4, SortColumn::Registry),
         ];
         let content_width = area.width.saturating_sub(2); // minus left+right borders
         let resolved = resolve_widths(&widths, content_width.saturating_sub(2)); // minus highlight symbol
@@ -531,11 +584,224 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 }
 
 // ---------------------------------------------------------------------------
+// Metadata tab
+// ---------------------------------------------------------------------------
+
+fn meta_row<'a>(label: &str, value: &str, c: &ThemeColors) -> Line<'a> {
+    let display = if value.is_empty() {
+        "-".to_string()
+    } else {
+        value.to_string()
+    };
+    Line::from(vec![
+        Span::styled(
+            format!("  {label:<22} "),
+            Style::default().fg(c.text_muted).bold(),
+        ),
+        Span::styled(display, Style::default().fg(c.text)),
+    ])
+}
+
+fn draw_metadata(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    let m = &app.sbom.metadata;
+
+    let tool_str = if m.tool_name.is_empty() {
+        String::new()
+    } else {
+        format!("{} {}", m.tool_name, m.tool_version)
+    };
+
+    let mut lines: Vec<Line> = vec![
+        Line::from(Span::styled(
+            "  SBOM Provenance",
+            Style::default().fg(c.accent).bold(),
+        )),
+        Line::from(""),
+        meta_row("Spec Version", &m.spec_version, c),
+        meta_row("Serial Number", &m.serial_number, c),
+        meta_row("Timestamp", &m.timestamp, c),
+        meta_row("Tool", &tool_str, c),
+        meta_row("Lifecycle Phase", &m.lifecycle_phase, c),
+        meta_row("Component Sources", &m.component_src_files, c),
+        meta_row("Component Types", &m.component_types, c),
+    ];
+
+    if !m.annotation.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "  Annotation",
+            Style::default().fg(c.accent).bold(),
+        )));
+        for chunk in m.annotation.as_bytes().chunks(80) {
+            let s = String::from_utf8_lossy(chunk);
+            lines.push(Line::from(Span::styled(
+                format!("  {s}"),
+                Style::default().fg(c.text_muted),
+            )));
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Component Statistics",
+        Style::default().fg(c.accent).bold(),
+    )));
+    lines.push(Line::from(""));
+
+    let total = app.sbom.components.len();
+    let direct = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.is_direct)
+        .count();
+    let transitive = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.dep_type == DepType::Transitive)
+        .count();
+    let outdated = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.is_outdated())
+        .count();
+    let no_license = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.licenses.is_empty())
+        .count();
+    let with_hashes = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| !comp.hashes.is_empty())
+        .count();
+    let with_vcs = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| !comp.vcs_url.is_empty())
+        .count();
+    let vulnerable = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.vuln_count > 0)
+        .count();
+    let copyleft = app
+        .sbom
+        .components
+        .values()
+        .filter(|comp| comp.has_copyleft())
+        .count();
+
+    lines.push(meta_row("Total Components", &total.to_string(), c));
+    lines.push(meta_row("Direct", &direct.to_string(), c));
+    lines.push(meta_row("Transitive", &transitive.to_string(), c));
+    lines.push(meta_row(
+        "With Hashes",
+        &format!("{with_hashes}/{total}"),
+        c,
+    ));
+    lines.push(meta_row("With VCS URL", &format!("{with_vcs}/{total}"), c));
+
+    if outdated > 0 {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<22} ", "Outdated"),
+                Style::default().fg(c.text_muted).bold(),
+            ),
+            Span::styled(
+                outdated.to_string(),
+                Style::default().fg(c.color_warning).bold(),
+            ),
+        ]));
+    }
+    if no_license > 0 {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<22} ", "No License"),
+                Style::default().fg(c.text_muted).bold(),
+            ),
+            Span::styled(
+                no_license.to_string(),
+                Style::default().fg(c.color_error).bold(),
+            ),
+        ]));
+    }
+    if copyleft > 0 {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<22} ", "Copyleft"),
+                Style::default().fg(c.text_muted).bold(),
+            ),
+            Span::styled(
+                copyleft.to_string(),
+                Style::default().fg(c.color_warning).bold(),
+            ),
+        ]));
+    }
+    if vulnerable > 0 {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<22} ", "Vulnerable"),
+                Style::default().fg(c.text_muted).bold(),
+            ),
+            Span::styled(
+                vulnerable.to_string(),
+                Style::default().fg(c.color_error).bold(),
+            ),
+        ]));
+    }
+
+    // Record the title bar (top border row) as a click target to switch to Table tab.
+    let title_bar = Rect::new(area.x, area.y, area.width, 1);
+    app.click_areas.panel_titles.push((title_bar, Tab::Table));
+
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(c.border_active))
+            .title(" Metadata ")
+            .title_style(Style::default().fg(c.accent).bold()),
+    );
+    frame.render_widget(paragraph, area);
+}
+
+// ---------------------------------------------------------------------------
 // Detail panel
 // ---------------------------------------------------------------------------
 
 fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
-    let content = if let Some(bom_ref) = app.selected_bom_ref() {
+    let content = if app.active_tab == Tab::Metadata {
+        // On the Metadata tab, show SBOM-level info instead of per-component detail
+        vec![
+            Line::from(vec![
+                Span::styled(
+                    &app.sbom.root_name,
+                    Style::default().bold().fg(c.text_bright),
+                ),
+                Span::styled(
+                    format!(" v{}", app.sbom.root_version),
+                    Style::default().fg(c.text_muted),
+                ),
+                Span::styled("  │  ", Style::default().fg(c.border)),
+                Span::styled(
+                    format!("{} components", app.sbom.components.len()),
+                    Style::default().fg(c.text),
+                ),
+            ]),
+            Line::from(Span::styled(
+                "Use Dependency List or Dependency Tree tabs to select a component",
+                Style::default().fg(c.text_muted).italic(),
+            )),
+            Line::from(""),
+            Line::from(""),
+        ]
+    } else if let Some(bom_ref) = app.selected_bom_ref() {
         if let Some(comp) = app.sbom.components.get(bom_ref) {
             let type_color = dep_type_color(&comp.dep_type, c);
             let license_style = if comp.licenses.is_empty() {
@@ -543,72 +809,150 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
             } else {
                 Style::default().fg(c.text)
             };
-            vec![
-                Line::from(vec![
-                    Span::styled(&comp.name, Style::default().bold().fg(c.text_bright)),
+
+            // Line 1: name, version, type, license, outdated indicator
+            let mut line1 = vec![
+                Span::styled(&comp.name, Style::default().bold().fg(c.text_bright)),
+                Span::styled(
+                    format!(" {}", comp.version),
+                    Style::default().fg(c.text_muted),
+                ),
+            ];
+            if comp.is_outdated() {
+                line1.push(Span::styled(
+                    format!(" → {}", comp.latest_version),
+                    Style::default().fg(c.color_warning).bold(),
+                ));
+            }
+            line1.extend([
+                Span::styled("  │  ", Style::default().fg(c.border)),
+                Span::styled("Type ", Style::default().fg(c.text_muted)),
+                Span::styled(
+                    comp.dep_type.label(),
+                    Style::default().fg(type_color).bold(),
+                ),
+                Span::styled("  │  ", Style::default().fg(c.border)),
+                Span::styled("License ", Style::default().fg(c.text_muted)),
+                Span::styled(comp.license_str(), license_style),
+            ]);
+            if comp.has_copyleft() {
+                line1.push(Span::styled(
+                    " ⚠ copyleft",
+                    Style::default().fg(c.color_warning),
+                ));
+            }
+            if comp.vuln_count > 0 {
+                line1.extend([
+                    Span::styled("  │  ", Style::default().fg(c.border)),
                     Span::styled(
-                        format!(" {}", comp.version),
+                        format!("{} vuln(s)", comp.vuln_count),
+                        Style::default().fg(c.color_error).bold(),
+                    ),
+                ]);
+            }
+            if let Some(conf) = comp.confidence {
+                line1.extend([
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled(
+                        format!("conf {:.0}%", conf * 100.0),
                         Style::default().fg(c.text_muted),
                     ),
-                    Span::styled("  │  ", Style::default().fg(c.border)),
-                    Span::styled("Type ", Style::default().fg(c.text_muted)),
-                    Span::styled(
-                        comp.dep_type.label(),
-                        Style::default().fg(type_color).bold(),
-                    ),
-                    Span::styled("  │  ", Style::default().fg(c.border)),
-                    Span::styled("License ", Style::default().fg(c.text_muted)),
-                    Span::styled(comp.license_str(), license_style),
-                    Span::styled("  │  ", Style::default().fg(c.border)),
-                    Span::styled("Registry ", Style::default().fg(c.text_muted)),
-                    Span::styled(
-                        if comp.registry.is_empty() {
-                            "-"
-                        } else {
-                            &comp.registry
-                        },
-                        Style::default().fg(c.text),
-                    ),
-                    Span::styled("  │  ", Style::default().fg(c.border)),
-                    Span::styled("Source ", Style::default().fg(c.text_muted)),
-                    Span::styled(
-                        if comp.source_file.is_empty() {
-                            "-"
-                        } else {
-                            &comp.source_file
-                        },
-                        Style::default().fg(c.text),
-                    ),
-                ]),
-                Line::from(Span::styled(
-                    &comp.description,
+                ]);
+            }
+
+            // Line 2: description + reverse deps
+            let mut line2_spans: Vec<Span> = Vec::new();
+            if !comp.description.is_empty() {
+                line2_spans.push(Span::styled(
+                    truncate(&comp.description, 60),
                     Style::default().fg(c.text_muted),
-                )),
-                Line::from({
-                    let mut info_spans = vec![Span::styled(
-                        format!("purl: {}", comp.purl),
-                        Style::default().fg(c.text_muted).italic(),
-                    )];
-                    if let Some(url) = comp.registry_url() {
-                        info_spans.push(Span::styled("    ", Style::default()));
-                        info_spans.push(Span::styled(
-                            url,
-                            Style::default()
-                                .fg(c.accent)
-                                .add_modifier(Modifier::UNDERLINED),
-                        ));
+                ));
+            }
+            // Reverse deps
+            let bom_ref_str = bom_ref.to_string();
+            if let Some(rdeps) = app.sbom.reverse_deps.get(&bom_ref_str) {
+                let names: Vec<&str> = rdeps
+                    .iter()
+                    .filter_map(|r| app.sbom.components.get(r).map(|c| c.name.as_str()))
+                    .take(5)
+                    .collect();
+                if !names.is_empty() {
+                    if !line2_spans.is_empty() {
+                        line2_spans.push(Span::styled("  │  ", Style::default().fg(c.border)));
                     }
-                    info_spans
-                }),
+                    let suffix = if rdeps.len() > 5 {
+                        format!(", +{}", rdeps.len() - 5)
+                    } else {
+                        String::new()
+                    };
+                    line2_spans.push(Span::styled("Used by ", Style::default().fg(c.text_muted)));
+                    line2_spans.push(Span::styled(
+                        format!("{}{suffix}", names.join(", ")),
+                        Style::default().fg(c.text),
+                    ));
+                }
+            }
+            if line2_spans.is_empty() {
+                line2_spans.push(Span::styled("", Style::default()));
+            }
+
+            // Line 3: purl, VCS or registry URL
+            let mut line3_spans = vec![Span::styled(
+                format!("purl: {}", comp.purl),
+                Style::default().fg(c.text_muted).italic(),
+            )];
+            if !comp.vcs_url.is_empty() {
+                line3_spans.push(Span::styled("    ", Style::default()));
+                line3_spans.push(Span::styled(
+                    &comp.vcs_url,
+                    Style::default()
+                        .fg(c.accent)
+                        .add_modifier(Modifier::UNDERLINED),
+                ));
+            } else if let Some(url) = comp.registry_url() {
+                line3_spans.push(Span::styled("    ", Style::default()));
+                line3_spans.push(Span::styled(
+                    url,
+                    Style::default()
+                        .fg(c.accent)
+                        .add_modifier(Modifier::UNDERLINED),
+                ));
+            }
+
+            // Line 4: hash digest (full, truncated by terminal width)
+            let line4 = if let Some((alg, digest)) = comp.hashes.first() {
+                Line::from(vec![
+                    Span::styled(format!("{alg}: "), Style::default().fg(c.text_muted)),
+                    Span::styled(digest, Style::default().fg(c.text_muted).italic()),
+                ])
+            } else {
+                Line::from("")
+            };
+
+            vec![
+                Line::from(line1),
+                Line::from(line2_spans),
+                Line::from(line3_spans),
+                line4,
             ]
         } else {
-            vec![Line::from("")]
+            vec![
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+            ]
         }
     } else {
-        vec![Line::from(Span::styled(
-            "Select a dependency to view details",
-            Style::default().fg(c.text_muted).italic(),
-        ))]
+        vec![
+            Line::from(Span::styled(
+                "Select a dependency to view details",
+                Style::default().fg(c.text_muted).italic(),
+            )),
+            Line::from(""),
+            Line::from(""),
+            Line::from(""),
+        ]
     };
 
     let block = Block::default()

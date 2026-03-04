@@ -58,6 +58,7 @@ pub struct ThemeColors {
     pub color_optional: Color,
     pub color_transitive: Color,
     pub color_error: Color,
+    pub color_warning: Color,
 
     // Borders / guides
     pub border: Color,
@@ -85,6 +86,7 @@ impl ThemeColors {
             color_optional: Color::Rgb(171, 71, 188),
             color_transitive: Color::Rgb(135, 135, 135),
             color_error: Color::Rgb(230, 80, 80),
+            color_warning: Color::Rgb(255, 200, 50),
 
             border: Color::Rgb(60, 60, 60),
             border_active: Color::Rgb(80, 80, 90),
@@ -111,6 +113,7 @@ impl ThemeColors {
             color_optional: Color::Rgb(140, 50, 160),
             color_transitive: Color::Rgb(110, 110, 110),
             color_error: Color::Rgb(200, 40, 40),
+            color_warning: Color::Rgb(180, 140, 0),
 
             border: Color::Rgb(200, 200, 200),
             border_active: Color::Rgb(160, 160, 170),
