@@ -2,6 +2,8 @@
 name = "sbom-viewer"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+authors = ["Jan Pipek <jan.pipek@gmail.com>"]
 
 [dependencies]
 ratatui = "0.29"
