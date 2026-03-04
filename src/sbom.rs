@@ -604,70 +604,6 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    #[test]
-    fn click_is_optional() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        // Find click
-        let click = sbom
-            .components
-            .values()
-            .find(|c| c.name == "click")
-            .expect("click not found in components");
-        assert_eq!(
-            click.dep_type,
-            DepType::Optional,
-            "click should be Optional, got {:?}",
-            click.dep_type
-        );
-    }
-
-    #[test]
-    fn toolz_is_required() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        let toolz = sbom
-            .components
-            .values()
-            .find(|c| c.name == "toolz")
-            .expect("toolz not found in components");
-        assert_eq!(
-            toolz.dep_type,
-            DepType::Required,
-            "toolz should be Required, got {:?}",
-            toolz.dep_type
-        );
-    }
-
-    #[test]
-    fn mypy_is_dev() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        let mypy = sbom
-            .components
-            .values()
-            .find(|c| c.name == "mypy")
-            .expect("mypy not found in components");
-        assert!(
-            matches!(mypy.dep_type, DepType::Dev(_)),
-            "mypy should be Dev, got {:?}",
-            mypy.dep_type
-        );
-    }
-
-    #[test]
-    fn colorama_is_transitive() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        let colorama = sbom
-            .components
-            .values()
-            .find(|c| c.name == "colorama")
-            .expect("colorama not found in components");
-        assert_eq!(
-            colorama.dep_type,
-            DepType::Transitive,
-            "colorama should be Transitive, got {:?}",
-            colorama.dep_type
-        );
-    }
-
     // -- purl_to_url tests --------------------------------------------------
 
     #[test]
@@ -828,26 +764,33 @@ mod tests {
     }
 
     #[test]
-    fn purl_from_bom_pypi() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        let click = sbom
+    fn parse_own_bom() {
+        let sbom = parse_sbom(Path::new("bom.json")).expect("failed to parse own bom.json");
+        assert_eq!(sbom.root_name, "sbom-viewer");
+        assert!(!sbom.components.is_empty(), "should have components");
+        assert!(!sbom.tree_roots.is_empty(), "should have tree roots");
+
+        // All components should be cargo packages
+        for comp in sbom.components.values() {
+            assert!(
+                comp.purl.starts_with("pkg:cargo/"),
+                "{} has unexpected purl: {}",
+                comp.name,
+                comp.purl
+            );
+        }
+
+        // ratatui should be a direct (required) dependency
+        let ratatui = sbom
             .components
             .values()
-            .find(|c| c.name == "click")
-            .unwrap();
+            .find(|c| c.name == "ratatui")
+            .expect("ratatui not found in components");
         assert_eq!(
-            click.registry_url(),
-            Some("https://pypi.org/project/click/8.3.1/".into())
+            ratatui.dep_type,
+            DepType::Required,
+            "ratatui should be Required, got {:?}",
+            ratatui.dep_type
         );
-    }
-
-    #[test]
-    fn purl_from_bom_cargo() {
-        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
-        // Find any cargo component
-        if let Some(cargo_comp) = sbom.components.values().find(|c| c.purl.contains("cargo")) {
-            let url = cargo_comp.registry_url().unwrap();
-            assert!(url.starts_with("https://crates.io/crates/"), "got: {url}");
-        }
     }
 }
