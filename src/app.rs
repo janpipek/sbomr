@@ -1,6 +1,7 @@
 //! Application state and input handling.
 
 use crate::sbom::{Component, SBOMData, TreeNode};
+use crate::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
 
@@ -185,6 +186,7 @@ pub struct App {
     pub sbom: SBOMData,
     pub active_tab: Tab,
     pub input_mode: InputMode,
+    pub theme: Theme,
 
     // Table
     pub table_state: TableState,
@@ -214,7 +216,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(sbom: SBOMData) -> Self {
+    pub fn new(sbom: SBOMData, theme: Theme) -> Self {
         let tree_roots = build_stateful_tree(&sbom.tree_roots);
         let flat_tree = flatten_visible(&tree_roots);
 
@@ -222,6 +224,7 @@ impl App {
             sbom,
             active_tab: Tab::Table,
             input_mode: InputMode::Normal,
+            theme,
             table_state: TableState::default(),
             visible_rows: Vec::new(),
             sort_column: SortColumn::Type,
@@ -268,6 +271,10 @@ impl App {
 
     pub fn has_active_filter(&self) -> bool {
         !self.filter_text.is_empty()
+    }
+
+    pub fn toggle_theme(&mut self) {
+        self.theme = self.theme.toggle();
     }
 
     // -- Sort / Filter ------------------------------------------------------

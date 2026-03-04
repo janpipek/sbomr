@@ -1,5 +1,6 @@
 mod app;
 mod sbom;
+mod theme;
 mod ui;
 
 use std::io;
@@ -37,7 +38,8 @@ fn main() -> Result<()> {
     }
 
     let sbom_data = sbom::parse_sbom(&sbom_path)?;
-    let mut app = app::App::new(sbom_data);
+    let initial_theme = theme::detect_os_theme();
+    let mut app = app::App::new(sbom_data, initial_theme);
 
     // Setup terminal
     enable_raw_mode()?;
@@ -248,6 +250,10 @@ fn run_loop(
                         if app.active_tab == app::Tab::Table {
                             app.clear_filter();
                         }
+                    }
+                    // Toggle light/dark theme
+                    KeyCode::Char('t') => {
+                        app.toggle_theme();
                     }
                     // Open package registry URL in browser
                     KeyCode::Char('o') => {

@@ -47,6 +47,19 @@ struct RawComponent {
     licenses: Vec<RawLicenseEntry>,
     #[serde(default)]
     properties: Vec<RawProperty>,
+    evidence: Option<RawEvidence>,
+}
+
+#[derive(Deserialize)]
+struct RawEvidence {
+    #[serde(default)]
+    identity: Vec<RawEvidenceIdentity>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawEvidenceIdentity {
+    concluded_value: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -122,6 +135,10 @@ pub struct Component {
     pub dep_group: String,
     pub is_direct: bool,
     pub dep_type: DepType,
+    /// Package registry type extracted from purl (e.g. "cargo", "pypi", "npm").
+    pub registry: String,
+    /// Lock file / source file from evidence (e.g. "Cargo.lock", "uv.lock").
+    pub source_file: String,
 }
 
 impl Component {
@@ -377,6 +394,20 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         let dep_group = get_property(&rc.properties, "cdx:pyproject:group").unwrap_or_default();
         let is_direct = root_direct.contains(&bom_ref);
 
+        // Extract registry type from purl (e.g. "pkg:cargo/..." -> "cargo")
+        let registry = purl
+            .strip_prefix("pkg:")
+            .and_then(|rest| rest.split('/').next())
+            .unwrap_or("")
+            .to_string();
+
+        // Extract source/lock file from evidence.identity[].concludedValue
+        let source_file = rc
+            .evidence
+            .as_ref()
+            .and_then(|ev| ev.identity.iter().find_map(|id| id.concluded_value.clone()))
+            .unwrap_or_default();
+
         if !dep_group.is_empty() {
             dev_refs.insert(bom_ref.clone());
         }
@@ -395,6 +426,8 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
                 is_direct,
                 // Placeholder — resolved below once all_child_refs is available.
                 dep_type: DepType::Transitive,
+                registry,
+                source_file,
             },
         );
     }

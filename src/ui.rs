@@ -1,9 +1,8 @@
 //! Terminal UI rendering with ratatui.
 //!
-//! Colour palette is designed to match the Textual (Python) dark theme.
+//! Colours are provided by the active [`Theme`] stored in [`App`].
 
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
@@ -11,53 +10,12 @@ use ratatui::{
         Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, Tabs,
     },
+    Frame,
 };
 
 use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
 use crate::sbom::DepType;
-
-// ---------------------------------------------------------------------------
-// Colour palette — mirrors Textual's dark theme tokens
-// ---------------------------------------------------------------------------
-
-/// Surface / main background (Textual $surface)
-const BG_SURFACE: Color = Color::Rgb(30, 30, 30);
-/// Slightly lighter surface for alternating rows / panels (Textual $surface-lighten-1)
-const BG_SURFACE_ALT: Color = Color::Rgb(38, 38, 38);
-/// Summary bar background (Textual $primary-background)
-const BG_PRIMARY: Color = Color::Rgb(0, 45, 80);
-/// Detail panel background (Textual $panel)
-const BG_PANEL: Color = Color::Rgb(35, 35, 40);
-/// Selection / highlight row
-const BG_HIGHLIGHT: Color = Color::Rgb(0, 80, 140);
-
-/// Primary accent (Textual $primary — dodger blue)
-const ACCENT: Color = Color::Rgb(0, 135, 255);
-/// Secondary text / muted (Textual $text-muted)
-const TEXT_MUTED: Color = Color::Rgb(135, 135, 135);
-/// Normal text
-const TEXT: Color = Color::Rgb(220, 220, 220);
-/// Bright text on highlight
-const TEXT_BRIGHT: Color = Color::Rgb(255, 255, 255);
-
-/// $success — green for required deps
-const COLOR_REQUIRED: Color = Color::Rgb(80, 200, 120);
-/// $warning — amber for dev deps
-const COLOR_DEV: Color = Color::Rgb(255, 183, 77);
-/// #ab47bc — purple for optional deps (same hex as Textual CSS)
-const COLOR_OPTIONAL: Color = Color::Rgb(171, 71, 188);
-/// Muted for transitive deps
-const COLOR_TRANSITIVE: Color = TEXT_MUTED;
-/// $error — red for missing licenses
-const COLOR_ERROR: Color = Color::Rgb(230, 80, 80);
-
-/// Border colour (subtle)
-const BORDER: Color = Color::Rgb(60, 60, 60);
-/// Border colour for focused/active panels
-const BORDER_ACTIVE: Color = Color::Rgb(80, 80, 90);
-
-/// Tree guide lines
-const TREE_GUIDE: Color = Color::Rgb(70, 70, 70);
+use crate::theme::ThemeColors;
 
 // ---------------------------------------------------------------------------
 // Top-level draw
@@ -67,9 +25,11 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // Reset click areas for this frame
     app.click_areas = ClickAreas::default();
 
+    let c = app.theme.colors();
+
     // Fill the entire screen with the surface background
     frame.render_widget(
-        Block::default().style(Style::default().bg(BG_SURFACE)),
+        Block::default().style(Style::default().bg(c.bg_surface)),
         frame.area(),
     );
 
@@ -77,44 +37,38 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
     let filter_bar_height = if show_filter_bar { 1 } else { 0 };
 
-    let [
-        header_area,
-        tabs_area,
-        filter_area,
-        main_area,
-        detail_area,
-        footer_area,
-    ] = Layout::vertical([
-        Constraint::Length(3),                 // summary bar
-        Constraint::Length(1),                 // tabs
-        Constraint::Length(filter_bar_height), // filter bar (0 or 1)
-        Constraint::Min(8),                    // table or tree
-        Constraint::Length(5),                 // detail panel
-        Constraint::Length(1),                 // footer keybinds
-    ])
-    .areas(frame.area());
+    let [header_area, tabs_area, filter_area, main_area, detail_area, footer_area] =
+        Layout::vertical([
+            Constraint::Length(3),                 // summary bar
+            Constraint::Length(1),                 // tabs
+            Constraint::Length(filter_bar_height), // filter bar (0 or 1)
+            Constraint::Min(8),                    // table or tree
+            Constraint::Length(5),                 // detail panel
+            Constraint::Length(1),                 // footer keybinds
+        ])
+        .areas(frame.area());
 
-    draw_summary(frame, app, header_area);
-    draw_tabs(frame, app, tabs_area);
+    draw_summary(frame, app, header_area, &c);
+    draw_tabs(frame, app, tabs_area, &c);
 
     if show_filter_bar {
-        draw_filter_bar(frame, app, filter_area);
+        draw_filter_bar(frame, app, filter_area, &c);
     }
 
     match app.active_tab {
-        Tab::Table => draw_table(frame, app, main_area),
-        Tab::Tree => draw_tree(frame, app, main_area),
+        Tab::Table => draw_table(frame, app, main_area, &c),
+        Tab::Tree => draw_tree(frame, app, main_area, &c),
     }
 
-    draw_detail(frame, app, detail_area);
-    draw_footer(frame, app, footer_area);
+    draw_detail(frame, app, detail_area, &c);
+    draw_footer(frame, app, footer_area, &c);
 }
 
 // ---------------------------------------------------------------------------
 // Summary bar
 // ---------------------------------------------------------------------------
 
-fn draw_summary(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
     let total = app.sbom.components.len();
     let direct = app.sbom.components.values().filter(|c| c.is_direct).count();
     let dev = app
@@ -133,36 +87,36 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect) {
     let text = Line::from(vec![
         Span::styled(
             format!("  {} ", app.sbom.root_name),
-            Style::default().bold().fg(TEXT_BRIGHT),
+            Style::default().bold().fg(c.text_bright),
         ),
         Span::styled(
             format!("v{}", app.sbom.root_version),
-            Style::default().fg(TEXT_MUTED),
+            Style::default().fg(c.text_muted),
         ),
         Span::raw("    "),
-        Span::styled("Components ", Style::default().fg(TEXT_MUTED)),
-        Span::styled(format!("{total}"), Style::default().bold().fg(TEXT)),
+        Span::styled("Components ", Style::default().fg(c.text_muted)),
+        Span::styled(format!("{total}"), Style::default().bold().fg(c.text)),
         Span::raw("    "),
-        Span::styled("Direct ", Style::default().fg(TEXT_MUTED)),
+        Span::styled("Direct ", Style::default().fg(c.text_muted)),
         Span::styled(
             format!("{direct}"),
-            Style::default().bold().fg(COLOR_REQUIRED),
+            Style::default().bold().fg(c.color_required),
         ),
         Span::raw("    "),
-        Span::styled("Dev/Tool ", Style::default().fg(TEXT_MUTED)),
-        Span::styled(format!("{dev}"), Style::default().bold().fg(COLOR_DEV)),
+        Span::styled("Dev/Tool ", Style::default().fg(c.text_muted)),
+        Span::styled(format!("{dev}"), Style::default().bold().fg(c.color_dev)),
         Span::raw("    "),
-        Span::styled("Licenses ", Style::default().fg(TEXT_MUTED)),
+        Span::styled("Licenses ", Style::default().fg(c.text_muted)),
         Span::styled(
             format!("{} unique", unique_licenses.len()),
-            Style::default().bold().fg(TEXT),
+            Style::default().bold().fg(c.text),
         ),
     ]);
 
     let block = Block::default()
-        .style(Style::default().bg(BG_PRIMARY))
+        .style(Style::default().bg(c.bg_primary))
         .borders(Borders::BOTTOM)
-        .border_style(Style::default().fg(ACCENT))
+        .border_style(Style::default().fg(c.accent))
         .padding(Padding::new(0, 0, 1, 0));
     let paragraph = Paragraph::new(text).block(block);
     frame.render_widget(paragraph, area);
@@ -172,7 +126,7 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect) {
 // Tabs
 // ---------------------------------------------------------------------------
 
-fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
+fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     let titles = vec![" Dependency List ", " Dependency Tree "];
     let selected = match app.active_tab {
         Tab::Table => 0,
@@ -180,14 +134,14 @@ fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
     };
     let tabs = Tabs::new(titles.clone())
         .select(selected)
-        .style(Style::default().fg(TEXT_MUTED).bg(BG_SURFACE))
+        .style(Style::default().fg(c.text_muted).bg(c.bg_surface))
         .highlight_style(
             Style::default()
-                .fg(ACCENT)
+                .fg(c.accent)
                 .bold()
                 .add_modifier(Modifier::UNDERLINED),
         )
-        .divider(Span::styled("│", Style::default().fg(BORDER)));
+        .divider(Span::styled("│", Style::default().fg(c.border)));
     frame.render_widget(tabs, area);
 
     // Record clickable tab areas.
@@ -215,17 +169,18 @@ fn sort_header_cell(label: &str, col: SortColumn, app: &App) -> Cell<'static> {
     }
 }
 
-fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
+fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     let header = Row::new(vec![
         sort_header_cell("Name", SortColumn::Name, app),
         sort_header_cell("Version", SortColumn::Version, app),
         sort_header_cell("License", SortColumn::License, app),
         sort_header_cell("Type", SortColumn::Type, app),
+        Cell::from("Registry"),
         Cell::from("Scope"),
         Cell::from("Group"),
         Cell::from("Description"),
     ])
-    .style(Style::default().bold().fg(ACCENT).bg(BG_SURFACE_ALT))
+    .style(Style::default().bold().fg(c.accent).bg(c.bg_surface_alt))
     .height(1)
     .bottom_margin(0);
 
@@ -235,46 +190,54 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         .enumerate()
         .map(|(i, bom_ref)| {
             let comp = &app.sbom.components[bom_ref];
-            let type_color = dep_type_color(&comp.dep_type);
+            let type_color = dep_type_color(&comp.dep_type, c);
 
             let license_style = if comp.licenses.is_empty() {
-                Style::default().fg(COLOR_ERROR).italic()
+                Style::default().fg(c.color_error).italic()
             } else {
-                Style::default().fg(TEXT)
+                Style::default().fg(c.text)
             };
 
             let row_bg = if i % 2 == 1 {
-                BG_SURFACE_ALT
+                c.bg_surface_alt
             } else {
-                BG_SURFACE
+                c.bg_surface
             };
 
             Row::new(vec![
-                Cell::from(comp.name.clone()).style(Style::default().fg(TEXT)),
-                Cell::from(comp.version.clone()).style(Style::default().fg(TEXT_MUTED)),
+                Cell::from(comp.name.clone()).style(Style::default().fg(c.text)),
+                Cell::from(comp.version.clone()).style(Style::default().fg(c.text_muted)),
                 Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.dep_type.label()).style(Style::default().fg(type_color)),
-                Cell::from(comp.scope.clone()).style(Style::default().fg(TEXT_MUTED)),
+                Cell::from(if comp.registry.is_empty() {
+                    "-".to_string()
+                } else {
+                    comp.registry.clone()
+                })
+                .style(Style::default().fg(c.text_muted)),
+                Cell::from(comp.scope.clone()).style(Style::default().fg(c.text_muted)),
                 Cell::from(if comp.dep_group.is_empty() {
                     "-".to_string()
                 } else {
                     comp.dep_group.clone()
                 })
-                .style(Style::default().fg(TEXT_MUTED)),
-                Cell::from(truncate(&comp.description, 50)).style(Style::default().fg(TEXT_MUTED)),
+                .style(Style::default().fg(c.text_muted)),
+                Cell::from(truncate(&comp.description, 50))
+                    .style(Style::default().fg(c.text_muted)),
             ])
             .style(Style::default().bg(row_bg))
         })
         .collect();
 
     let widths = [
-        Constraint::Length(22),
-        Constraint::Length(10),
-        Constraint::Length(28),
-        Constraint::Length(14),
-        Constraint::Length(10),
-        Constraint::Length(8),
-        Constraint::Min(20),
+        Constraint::Length(22), // Name
+        Constraint::Length(10), // Version
+        Constraint::Length(28), // License
+        Constraint::Length(14), // Type
+        Constraint::Length(10), // Registry
+        Constraint::Length(10), // Scope
+        Constraint::Length(8),  // Group
+        Constraint::Min(20),    // Description
     ];
 
     // Record column header click areas.
@@ -324,14 +287,14 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(BORDER_ACTIVE))
+                .border_style(Style::default().fg(c.border_active))
                 .title(title)
-                .title_style(Style::default().fg(ACCENT).bold()),
+                .title_style(Style::default().fg(c.accent).bold()),
         )
         .row_highlight_style(
             Style::default()
-                .bg(BG_HIGHLIGHT)
-                .fg(TEXT_BRIGHT)
+                .bg(c.bg_highlight)
+                .fg(c.text_bright)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
@@ -349,8 +312,8 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼"))
-                .track_style(Style::default().fg(BORDER))
-                .thumb_style(Style::default().fg(TEXT_MUTED)),
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
             area,
             &mut scrollbar_state,
         );
@@ -361,7 +324,7 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
 // Filter bar
 // ---------------------------------------------------------------------------
 
-fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
     let is_inputting = app.input_mode == InputMode::FilterInput;
     let display_text = if is_inputting {
         &app.filter_input_buf
@@ -372,36 +335,36 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut spans = vec![
         Span::styled(
             " Filter ",
-            Style::default().bold().fg(BG_SURFACE).bg(ACCENT),
+            Style::default().bold().fg(c.bg_surface).bg(c.accent),
         ),
         Span::styled(
             format!(" {} ", app.filter_column.label()),
-            Style::default().fg(ACCENT).bold(),
+            Style::default().fg(c.accent).bold(),
         ),
-        Span::styled("│ ", Style::default().fg(BORDER)),
+        Span::styled("│ ", Style::default().fg(c.border)),
     ];
 
     if display_text.is_empty() && !is_inputting {
         spans.push(Span::styled(
             "press / to filter",
-            Style::default().fg(TEXT_MUTED).italic(),
+            Style::default().fg(c.text_muted).italic(),
         ));
     } else {
-        spans.push(Span::styled(display_text, Style::default().fg(TEXT)));
+        spans.push(Span::styled(display_text, Style::default().fg(c.text)));
         if is_inputting {
-            spans.push(Span::styled("█", Style::default().fg(ACCENT)));
+            spans.push(Span::styled("█", Style::default().fg(c.accent)));
         }
     }
 
     if !display_text.is_empty() && !is_inputting {
         spans.push(Span::styled(
             "  (x to clear)",
-            Style::default().fg(TEXT_MUTED),
+            Style::default().fg(c.text_muted),
         ));
     }
 
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(c.bg_surface_alt)),
         area,
     );
 }
@@ -410,7 +373,7 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
 // Tree tab
 // ---------------------------------------------------------------------------
 
-fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
+fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     let visible_height = area.height.saturating_sub(2) as usize; // borders
     app.adjust_tree_scroll(visible_height);
 
@@ -433,7 +396,7 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
 
             if line.is_category {
                 // Category header (bold, coloured)
-                let color = category_color(&line.label);
+                let color = category_color(&line.label, c);
                 let chevron = if !line.has_children {
                     "  "
                 } else if line.expanded {
@@ -452,7 +415,7 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                 if !line.expanded && line.has_children {
                     spans.push(Span::styled(
                         " ...",
-                        Style::default().fg(TEXT_MUTED).italic(),
+                        Style::default().fg(c.text_muted).italic(),
                     ));
                 }
             } else {
@@ -472,13 +435,13 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                 };
                 spans.push(Span::styled(
                     format!("{indent}{connector}"),
-                    Style::default().fg(TREE_GUIDE),
+                    Style::default().fg(c.tree_guide),
                 ));
 
                 // Expand/collapse icon for nodes with children
                 if line.has_children {
                     let icon = if line.expanded { "▼ " } else { "▶ " };
-                    spans.push(Span::styled(icon, Style::default().fg(ACCENT)));
+                    spans.push(Span::styled(icon, Style::default().fg(c.accent)));
                 } else {
                     spans.push(Span::styled("  ", Style::default()));
                 }
@@ -488,19 +451,19 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                     let license = license_part.trim_end_matches(']');
                     // Split name and version
                     if let Some((name, version)) = name_ver.rsplit_once(' ') {
-                        spans.push(Span::styled(name, Style::default().fg(TEXT)));
+                        spans.push(Span::styled(name, Style::default().fg(c.text)));
                         spans.push(Span::styled(
                             format!(" {version}"),
-                            Style::default().fg(TEXT_MUTED),
+                            Style::default().fg(c.text_muted),
                         ));
                     } else {
-                        spans.push(Span::styled(name_ver, Style::default().fg(TEXT)));
+                        spans.push(Span::styled(name_ver, Style::default().fg(c.text)));
                     }
                     spans.push(Span::raw("  "));
                     let lic_color = if license == "(none)" {
-                        COLOR_ERROR
+                        c.color_error
                     } else {
-                        TEXT_MUTED
+                        c.text_muted
                     };
                     let lic_style = if license == "(none)" {
                         Style::default().fg(lic_color).italic()
@@ -509,14 +472,17 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                     };
                     spans.push(Span::styled(format!("[{license}]"), lic_style));
                 } else {
-                    spans.push(Span::styled(line.label.clone(), Style::default().fg(TEXT)));
+                    spans.push(Span::styled(
+                        line.label.clone(),
+                        Style::default().fg(c.text),
+                    ));
                 }
 
                 // Collapsed hint
                 if line.has_children && !line.expanded {
                     spans.push(Span::styled(
                         " ...",
-                        Style::default().fg(TEXT_MUTED).italic(),
+                        Style::default().fg(c.text_muted).italic(),
                     ));
                 }
             }
@@ -525,8 +491,8 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
             if is_selected {
                 result.style(
                     Style::default()
-                        .bg(BG_HIGHLIGHT)
-                        .fg(TEXT_BRIGHT)
+                        .bg(c.bg_highlight)
+                        .fg(c.text_bright)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
@@ -542,9 +508,9 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
     let paragraph = Paragraph::new(lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(BORDER_ACTIVE))
+            .border_style(Style::default().fg(c.border_active))
             .title(" Dependency Tree ")
-            .title_style(Style::default().fg(ACCENT).bold()),
+            .title_style(Style::default().fg(c.accent).bold()),
     );
     frame.render_widget(paragraph, area);
 
@@ -556,8 +522,8 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
                 .end_symbol(Some("▼"))
-                .track_style(Style::default().fg(BORDER))
-                .thumb_style(Style::default().fg(TEXT_MUTED)),
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
             area,
             &mut scrollbar_state,
         );
@@ -568,60 +534,67 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
 // Detail panel
 // ---------------------------------------------------------------------------
 
-fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
     let content = if let Some(bom_ref) = app.selected_bom_ref() {
         if let Some(comp) = app.sbom.components.get(bom_ref) {
-            let type_color = dep_type_color(&comp.dep_type);
+            let type_color = dep_type_color(&comp.dep_type, c);
             let license_style = if comp.licenses.is_empty() {
-                Style::default().fg(COLOR_ERROR).italic()
+                Style::default().fg(c.color_error).italic()
             } else {
-                Style::default().fg(TEXT)
+                Style::default().fg(c.text)
             };
             vec![
                 Line::from(vec![
-                    Span::styled(&comp.name, Style::default().bold().fg(TEXT_BRIGHT)),
+                    Span::styled(&comp.name, Style::default().bold().fg(c.text_bright)),
                     Span::styled(
                         format!(" {}", comp.version),
-                        Style::default().fg(TEXT_MUTED),
+                        Style::default().fg(c.text_muted),
                     ),
-                    Span::styled("  │  ", Style::default().fg(BORDER)),
-                    Span::styled("Type ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled("Type ", Style::default().fg(c.text_muted)),
                     Span::styled(
                         comp.dep_type.label(),
                         Style::default().fg(type_color).bold(),
                     ),
-                    Span::styled("  │  ", Style::default().fg(BORDER)),
-                    Span::styled("License ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled("License ", Style::default().fg(c.text_muted)),
                     Span::styled(comp.license_str(), license_style),
-                    Span::styled("  │  ", Style::default().fg(BORDER)),
-                    Span::styled("Scope ", Style::default().fg(TEXT_MUTED)),
-                    Span::styled(&comp.scope, Style::default().fg(TEXT)),
-                    Span::styled("  │  ", Style::default().fg(BORDER)),
-                    Span::styled("Group ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled("Registry ", Style::default().fg(c.text_muted)),
                     Span::styled(
-                        if comp.dep_group.is_empty() {
+                        if comp.registry.is_empty() {
                             "-"
                         } else {
-                            &comp.dep_group
+                            &comp.registry
                         },
-                        Style::default().fg(TEXT),
+                        Style::default().fg(c.text),
+                    ),
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled("Source ", Style::default().fg(c.text_muted)),
+                    Span::styled(
+                        if comp.source_file.is_empty() {
+                            "-"
+                        } else {
+                            &comp.source_file
+                        },
+                        Style::default().fg(c.text),
                     ),
                 ]),
                 Line::from(Span::styled(
                     &comp.description,
-                    Style::default().fg(TEXT_MUTED),
+                    Style::default().fg(c.text_muted),
                 )),
                 Line::from({
                     let mut info_spans = vec![Span::styled(
                         format!("purl: {}", comp.purl),
-                        Style::default().fg(TEXT_MUTED).italic(),
+                        Style::default().fg(c.text_muted).italic(),
                     )];
                     if let Some(url) = comp.registry_url() {
                         info_spans.push(Span::styled("    ", Style::default()));
                         info_spans.push(Span::styled(
                             url,
                             Style::default()
-                                .fg(ACCENT)
+                                .fg(c.accent)
                                 .add_modifier(Modifier::UNDERLINED),
                         ));
                     }
@@ -634,16 +607,16 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         vec![Line::from(Span::styled(
             "Select a dependency to view details",
-            Style::default().fg(TEXT_MUTED).italic(),
+            Style::default().fg(c.text_muted).italic(),
         ))]
     };
 
     let block = Block::default()
-        .style(Style::default().bg(BG_PANEL))
+        .style(Style::default().bg(c.bg_panel))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(BORDER_ACTIVE))
+        .border_style(Style::default().fg(c.border_active))
         .title(" Detail ")
-        .title_style(Style::default().fg(ACCENT).bold());
+        .title_style(Style::default().fg(c.accent).bold());
     let paragraph = Paragraph::new(content).block(block);
     frame.render_widget(paragraph, area);
 }
@@ -652,9 +625,9 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
 // Footer
 // ---------------------------------------------------------------------------
 
-fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
-    let key_style = Style::default().bold().fg(BG_SURFACE).bg(TEXT_MUTED);
-    let sep = Style::default().fg(TEXT_MUTED);
+fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
+    let key_style = Style::default().bold().fg(c.bg_surface).bg(c.text_muted);
+    let sep = Style::default().fg(c.text_muted);
 
     if app.input_mode == InputMode::FilterInput {
         let spans = vec![
@@ -664,11 +637,11 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(" Cancel  ", sep),
             Span::styled(
                 "  Type to filter...",
-                Style::default().fg(TEXT_MUTED).italic(),
+                Style::default().fg(c.text_muted).italic(),
             ),
         ];
         frame.render_widget(
-            Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(c.bg_surface_alt)),
             area,
         );
         return;
@@ -683,6 +656,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(" Navigate  ", sep),
         Span::styled(" o ", key_style),
         Span::styled(" Open URL  ", sep),
+        Span::styled(" t ", key_style),
+        Span::styled(format!(" {} ", app.theme.label()), sep),
     ];
     if app.active_tab == Tab::Table {
         spans.extend([
@@ -715,7 +690,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ]);
     }
     frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(c.bg_surface_alt)),
         area,
     );
 }
@@ -724,22 +699,22 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn dep_type_color(dt: &DepType) -> Color {
+fn dep_type_color(dt: &DepType, c: &ThemeColors) -> Color {
     match dt {
-        DepType::Required => COLOR_REQUIRED,
-        DepType::Dev(_) => COLOR_DEV,
-        DepType::Optional => COLOR_OPTIONAL,
-        DepType::Transitive => COLOR_TRANSITIVE,
+        DepType::Required => c.color_required,
+        DepType::Dev(_) => c.color_dev,
+        DepType::Optional => c.color_optional,
+        DepType::Transitive => c.color_transitive,
     }
 }
 
-fn category_color(label: &str) -> Color {
+fn category_color(label: &str, c: &ThemeColors) -> Color {
     if label.contains("required") {
-        COLOR_REQUIRED
+        c.color_required
     } else if label.contains("dev") {
-        COLOR_DEV
+        c.color_dev
     } else {
-        COLOR_OPTIONAL
+        c.color_optional
     }
 }
 
