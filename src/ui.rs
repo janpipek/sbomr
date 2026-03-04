@@ -13,7 +13,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, InputMode, SortColumn, Tab};
+use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
 use crate::sbom::DepType;
 
 // ---------------------------------------------------------------------------
@@ -64,6 +64,9 @@ const TREE_GUIDE: Color = Color::Rgb(70, 70, 70);
 // ---------------------------------------------------------------------------
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
+    // Reset click areas for this frame
+    app.click_areas = ClickAreas::default();
+
     // Fill the entire screen with the surface background
     frame.render_widget(
         Block::default().style(Style::default().bg(BG_SURFACE)),
@@ -163,13 +166,13 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect) {
 // Tabs
 // ---------------------------------------------------------------------------
 
-fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
-    let titles = vec![" Table ", " Tree "];
+fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect) {
+    let titles = vec![" Dependency List ", " Dependency Tree "];
     let selected = match app.active_tab {
         Tab::Table => 0,
         Tab::Tree => 1,
     };
-    let tabs = Tabs::new(titles)
+    let tabs = Tabs::new(titles.clone())
         .select(selected)
         .style(Style::default().fg(TEXT_MUTED).bg(BG_SURFACE))
         .highlight_style(
@@ -180,6 +183,18 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
         )
         .divider(Span::styled("│", Style::default().fg(BORDER)));
     frame.render_widget(tabs, area);
+
+    // Record clickable tab areas.
+    // Tab layout: each title is rendered sequentially with a "│" divider between them.
+    // We compute approximate positions based on title widths.
+    let tab_variants = [Tab::Table, Tab::Tree];
+    let mut x = area.x;
+    for (i, title) in titles.iter().enumerate() {
+        let w = title.len() as u16;
+        let tab_area = Rect::new(x, area.y, w, 1);
+        app.click_areas.tabs.push((tab_area, tab_variants[i]));
+        x += w + 1; // +1 for the "│" divider
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -256,15 +271,47 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Min(20),
     ];
 
+    // Record column header click areas.
+    // The table has a 1-cell border on each side, so content starts at area.x + 1.
+    // The highlight_symbol "▶ " takes 2 chars, so columns start at area.x + 1 + 2.
+    // The header row is at area.y + 1 (below the top border).
+    {
+        let sortable_columns: [(usize, SortColumn); 4] = [
+            (0, SortColumn::Name),
+            (1, SortColumn::Version),
+            (2, SortColumn::License),
+            (3, SortColumn::Type),
+        ];
+        let content_width = area.width.saturating_sub(2); // minus left+right borders
+        let resolved = resolve_widths(&widths, content_width.saturating_sub(2)); // minus highlight symbol
+        let mut col_x = area.x + 1 + 2; // border + highlight symbol
+        for (col_idx, col_width) in resolved.iter().enumerate() {
+            if let Some(&(_, sort_col)) = sortable_columns.iter().find(|(i, _)| *i == col_idx) {
+                let header_area = Rect::new(col_x, area.y + 1, *col_width, 1);
+                app.click_areas.column_headers.push((header_area, sort_col));
+            }
+            col_x += col_width;
+        }
+
+        // Record the table body area (rows start after border + header row).
+        let body_y = area.y + 2; // top border + header
+        let body_height = area.height.saturating_sub(3); // top border + header + bottom border
+        app.click_areas.table_body = Some(Rect::new(area.x, body_y, area.width, body_height));
+    }
+
     let title = if app.has_active_filter() {
         format!(
-            " Dependencies ({}/{}) ",
+            " Dependency List ({}/{}) ",
             app.visible_rows.len(),
             app.sbom.components.len()
         )
     } else {
-        format!(" Dependencies ({}) ", app.sbom.components.len())
+        format!(" Dependency List ({}) ", app.sbom.components.len())
     };
+
+    // Record the title bar (top border row) as a click target to switch to Tree tab.
+    let title_bar = Rect::new(area.x, area.y, area.width, 1);
+    app.click_areas.panel_titles.push((title_bar, Tab::Tree));
 
     let table = Table::new(rows, widths)
         .header(header)
@@ -360,6 +407,11 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
     let visible_height = area.height.saturating_sub(2) as usize; // borders
     app.adjust_tree_scroll(visible_height);
+
+    // Record tree body area (inside borders)
+    let body_y = area.y + 1; // top border
+    let body_height = area.height.saturating_sub(2); // top + bottom borders
+    app.click_areas.tree_body = Some(Rect::new(area.x, body_y, area.width, body_height));
 
     let start = app.tree_scroll_offset;
     let end = (start + visible_height).min(app.flat_tree.len());
@@ -476,6 +528,10 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
             }
         })
         .collect();
+
+    // Record the title bar (top border row) as a click target to switch to Table tab.
+    let title_bar = Rect::new(area.x, area.y, area.width, 1);
+    app.click_areas.panel_titles.push((title_bar, Tab::Table));
 
     let paragraph = Paragraph::new(lines).block(
         Block::default()
@@ -679,6 +735,37 @@ fn category_color(label: &str) -> Color {
     } else {
         COLOR_OPTIONAL
     }
+}
+
+/// Resolve constraint widths into absolute pixel values (matching ratatui's layout logic).
+fn resolve_widths(constraints: &[Constraint], available: u16) -> Vec<u16> {
+    // First pass: allocate fixed lengths and collect Min columns
+    let mut result = vec![0u16; constraints.len()];
+    let mut remaining = available;
+    let mut min_indices = Vec::new();
+    for (i, c) in constraints.iter().enumerate() {
+        match c {
+            Constraint::Length(w) => {
+                let w = (*w).min(remaining);
+                result[i] = w;
+                remaining = remaining.saturating_sub(w);
+            }
+            Constraint::Min(min) => {
+                result[i] = *min;
+                remaining = remaining.saturating_sub(*min);
+                min_indices.push(i);
+            }
+            _ => {}
+        }
+    }
+    // Distribute remaining space to Min columns
+    if !min_indices.is_empty() && remaining > 0 {
+        let extra = remaining / min_indices.len() as u16;
+        for idx in min_indices {
+            result[idx] += extra;
+        }
+    }
+    result
 }
 
 fn truncate(s: &str, max_len: usize) -> String {

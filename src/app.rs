@@ -1,6 +1,7 @@
 //! Application state and input handling.
 
 use crate::sbom::{Component, SBOMData, TreeNode};
+use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,6 +159,25 @@ pub struct FlatTreeLine {
 }
 
 // ---------------------------------------------------------------------------
+// Click areas — stored after each draw so the event loop can do hit-testing
+// ---------------------------------------------------------------------------
+
+/// Saved layout regions for mouse hit-testing.
+#[derive(Debug, Clone, Default)]
+pub struct ClickAreas {
+    /// Area of each tab label: (area, Tab)
+    pub tabs: Vec<(Rect, Tab)>,
+    /// Area of each sortable column header: (area, SortColumn)
+    pub column_headers: Vec<(Rect, SortColumn)>,
+    /// Area of the table body (rows)
+    pub table_body: Option<Rect>,
+    /// Area of the tree body (rows)
+    pub tree_body: Option<Rect>,
+    /// Panel title bars that act as tab switches: (area, Tab)
+    pub panel_titles: Vec<(Rect, Tab)>,
+}
+
+// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
@@ -187,6 +207,9 @@ pub struct App {
     pub tree_roots: Vec<StatefulNode>,
     pub flat_tree: Vec<FlatTreeLine>,
 
+    /// Areas saved after each draw for mouse click handling.
+    pub click_areas: ClickAreas,
+
     pub should_quit: bool,
 }
 
@@ -210,6 +233,7 @@ impl App {
             tree_scroll_offset: 0,
             tree_roots,
             flat_tree,
+            click_areas: ClickAreas::default(),
             should_quit: false,
         };
         app.rebuild_visible_rows();
@@ -255,6 +279,17 @@ impl App {
 
     pub fn toggle_sort_direction(&mut self) {
         self.sort_direction = self.sort_direction.toggle();
+        self.rebuild_visible_rows();
+    }
+
+    /// Set sort to a specific column. If already sorted by that column, toggle direction.
+    pub fn set_sort_column(&mut self, col: SortColumn) {
+        if self.sort_column == col {
+            self.sort_direction = self.sort_direction.toggle();
+        } else {
+            self.sort_column = col;
+            self.sort_direction = SortDirection::Asc;
+        }
         self.rebuild_visible_rows();
     }
 
@@ -520,6 +555,20 @@ impl App {
                 .table_state
                 .select(Some(self.table_len().saturating_sub(1))),
             Tab::Tree => self.tree_selected = self.tree_len().saturating_sub(1),
+        }
+    }
+
+    /// Select a table row by visible index (from mouse click).
+    pub fn select_table_row(&mut self, row: usize) {
+        if row < self.table_len() {
+            self.table_state.select(Some(row));
+        }
+    }
+
+    /// Select a tree row by visible index (from mouse click).
+    pub fn select_tree_row(&mut self, row: usize) {
+        if row < self.tree_len() {
+            self.tree_selected = row;
         }
     }
 
