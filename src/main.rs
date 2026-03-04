@@ -17,14 +17,22 @@ fn main() -> Result<()> {
     color_eyre::install()?;
 
     // Determine SBOM file path from args (default: bom.json)
-    let sbom_path = std::env::args()
-        .nth(1)
+    let arg = std::env::args().nth(1);
+    if matches!(arg.as_deref(), Some("--help" | "-h")) {
+        println!("Usage: sbomr [path/to/bom.json]");
+        println!();
+        println!("Interactive TUI viewer for CycloneDX SBOMs.");
+        println!("If no path is given, looks for bom.json in the current directory.");
+        std::process::exit(0);
+    }
+
+    let sbom_path = arg
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("bom.json"));
 
     if !sbom_path.exists() {
         eprintln!("Error: SBOM file not found: {}", sbom_path.display());
-        eprintln!("Usage: sbom-viewer [path/to/bom.json]");
+        eprintln!("Usage: sbomr [path/to/bom.json]");
         std::process::exit(1);
     }
 
