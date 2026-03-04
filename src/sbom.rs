@@ -132,6 +132,133 @@ impl Component {
             self.licenses.join(", ")
         }
     }
+
+    pub fn registry_url(&self) -> Option<String> {
+        purl_to_url(&self.purl)
+    }
+}
+
+/// Convert a Package URL (purl) to a browsable registry URL.
+///
+/// Supports the most common purl types:
+///   pkg:pypi/NAME@VERSION       -> https://pypi.org/project/NAME/VERSION/
+///   pkg:npm/%40SCOPE/NAME@VER   -> https://www.npmjs.com/package/@scope/name/v/VER
+///   pkg:npm/NAME@VER            -> https://www.npmjs.com/package/name/v/VER
+///   pkg:cargo/NAME@VER          -> https://crates.io/crates/NAME/VER
+///   pkg:gem/NAME@VER            -> https://rubygems.org/gems/NAME/versions/VER
+///   pkg:maven/GROUP/NAME@VER    -> https://central.sonatype.com/artifact/GROUP/NAME/VER
+///   pkg:nuget/NAME@VER          -> https://www.nuget.org/packages/NAME/VER
+///   pkg:golang/MODULE@VER       -> https://pkg.go.dev/MODULE@VER
+///   pkg:composer/VENDOR/NAME@V  -> https://packagist.org/packages/VENDOR/NAME#VER
+///   pkg:hex/NAME@VER            -> https://hex.pm/packages/NAME/VER
+///   pkg:cocoapods/NAME@VER      -> https://cocoapods.org/pods/NAME
+///   pkg:pub/NAME@VER            -> https://pub.dev/packages/NAME/versions/VER
+///   pkg:swift/HOST/OWNER/REPO@V -> https://HOST/OWNER/REPO (tag VER)
+///   pkg:hackage/NAME@VER        -> https://hackage.haskell.org/package/NAME-VER
+///   pkg:cran/NAME@VER           -> https://cran.r-project.org/package=NAME
+fn purl_to_url(purl: &str) -> Option<String> {
+    // purl format: pkg:TYPE/[NAMESPACE/]NAME@VERSION[?qualifiers][#subpath]
+    let purl = purl.strip_prefix("pkg:")?;
+
+    // Split off qualifiers and subpath
+    let purl = purl.split('?').next().unwrap_or(purl);
+    let purl = purl.split('#').next().unwrap_or(purl);
+
+    let (pkg_type, rest) = purl.split_once('/')?;
+    let pkg_type = pkg_type.to_lowercase();
+
+    // Split name@version (version may be absent)
+    let (path, version) = match rest.rsplit_once('@') {
+        Some((p, v)) => (p, Some(v)),
+        None => (rest, None),
+    };
+
+    // URL-decode %40 -> @ for npm scoped packages etc.
+    let path_decoded = path.replace("%40", "@");
+
+    match pkg_type.as_str() {
+        "pypi" => {
+            // PyPI normalises names: underscores -> hyphens, lowercase
+            let name = path_decoded.replace('_', "-").to_lowercase();
+            match version {
+                Some(v) => Some(format!("https://pypi.org/project/{name}/{v}/")),
+                None => Some(format!("https://pypi.org/project/{name}/")),
+            }
+        }
+        "npm" => {
+            // npm: path may be @scope/name or just name
+            let name = path_decoded.to_lowercase();
+            match version {
+                Some(v) => Some(format!("https://www.npmjs.com/package/{name}/v/{v}")),
+                None => Some(format!("https://www.npmjs.com/package/{name}")),
+            }
+        }
+        "cargo" => match version {
+            Some(v) => Some(format!("https://crates.io/crates/{path_decoded}/{v}")),
+            None => Some(format!("https://crates.io/crates/{path_decoded}")),
+        },
+        "gem" => match version {
+            Some(v) => Some(format!(
+                "https://rubygems.org/gems/{path_decoded}/versions/{v}"
+            )),
+            None => Some(format!("https://rubygems.org/gems/{path_decoded}")),
+        },
+        "maven" => {
+            // Maven purl: pkg:maven/group/artifact@version
+            // group uses '/' separators in purl
+            match version {
+                Some(v) => Some(format!(
+                    "https://central.sonatype.com/artifact/{path_decoded}/{v}"
+                )),
+                None => Some(format!(
+                    "https://central.sonatype.com/artifact/{path_decoded}"
+                )),
+            }
+        }
+        "nuget" => match version {
+            Some(v) => Some(format!("https://www.nuget.org/packages/{path_decoded}/{v}")),
+            None => Some(format!("https://www.nuget.org/packages/{path_decoded}")),
+        },
+        "golang" => {
+            // Go modules: pkg:golang/github.com/foo/bar@v1.2.3
+            match version {
+                Some(v) => Some(format!("https://pkg.go.dev/{path_decoded}@{v}")),
+                None => Some(format!("https://pkg.go.dev/{path_decoded}")),
+            }
+        }
+        "composer" => {
+            // Packagist: pkg:composer/vendor/package@version
+            match version {
+                Some(v) => Some(format!("https://packagist.org/packages/{path_decoded}#{v}")),
+                None => Some(format!("https://packagist.org/packages/{path_decoded}")),
+            }
+        }
+        "hex" => match version {
+            Some(v) => Some(format!("https://hex.pm/packages/{path_decoded}/{v}")),
+            None => Some(format!("https://hex.pm/packages/{path_decoded}")),
+        },
+        "cocoapods" => Some(format!("https://cocoapods.org/pods/{path_decoded}")),
+        "pub" => match version {
+            Some(v) => Some(format!(
+                "https://pub.dev/packages/{path_decoded}/versions/{v}"
+            )),
+            None => Some(format!("https://pub.dev/packages/{path_decoded}")),
+        },
+        "swift" => {
+            // Swift purl: pkg:swift/github.com/owner/repo@version
+            Some(format!("https://{path_decoded}"))
+        }
+        "hackage" => match version {
+            Some(v) => Some(format!(
+                "https://hackage.haskell.org/package/{path_decoded}-{v}"
+            )),
+            None => Some(format!(
+                "https://hackage.haskell.org/package/{path_decoded}"
+            )),
+        },
+        "cran" => Some(format!("https://cran.r-project.org/package={path_decoded}")),
+        _ => None,
+    }
 }
 
 /// A node in the dependency tree for the Tree tab.
@@ -539,5 +666,188 @@ mod tests {
             "colorama should be Transitive, got {:?}",
             colorama.dep_type
         );
+    }
+
+    // -- purl_to_url tests --------------------------------------------------
+
+    #[test]
+    fn purl_pypi() {
+        assert_eq!(
+            purl_to_url("pkg:pypi/click@8.3.1"),
+            Some("https://pypi.org/project/click/8.3.1/".into())
+        );
+    }
+
+    #[test]
+    fn purl_pypi_normalises_underscores() {
+        assert_eq!(
+            purl_to_url("pkg:pypi/my_package@1.0"),
+            Some("https://pypi.org/project/my-package/1.0/".into())
+        );
+    }
+
+    #[test]
+    fn purl_cargo() {
+        assert_eq!(
+            purl_to_url("pkg:cargo/serde@1.0.228"),
+            Some("https://crates.io/crates/serde/1.0.228".into())
+        );
+    }
+
+    #[test]
+    fn purl_npm_unscoped() {
+        assert_eq!(
+            purl_to_url("pkg:npm/express@4.18.2"),
+            Some("https://www.npmjs.com/package/express/v/4.18.2".into())
+        );
+    }
+
+    #[test]
+    fn purl_npm_scoped() {
+        assert_eq!(
+            purl_to_url("pkg:npm/%40angular/core@16.0.0"),
+            Some("https://www.npmjs.com/package/@angular/core/v/16.0.0".into())
+        );
+    }
+
+    #[test]
+    fn purl_gem() {
+        assert_eq!(
+            purl_to_url("pkg:gem/rails@7.0.4"),
+            Some("https://rubygems.org/gems/rails/versions/7.0.4".into())
+        );
+    }
+
+    #[test]
+    fn purl_maven() {
+        assert_eq!(
+            purl_to_url("pkg:maven/org.apache.commons/commons-lang3@3.12.0"),
+            Some(
+                "https://central.sonatype.com/artifact/org.apache.commons/commons-lang3/3.12.0"
+                    .into()
+            )
+        );
+    }
+
+    #[test]
+    fn purl_nuget() {
+        assert_eq!(
+            purl_to_url("pkg:nuget/Newtonsoft.Json@13.0.1"),
+            Some("https://www.nuget.org/packages/Newtonsoft.Json/13.0.1".into())
+        );
+    }
+
+    #[test]
+    fn purl_golang() {
+        assert_eq!(
+            purl_to_url("pkg:golang/github.com/gin-gonic/gin@v1.9.1"),
+            Some("https://pkg.go.dev/github.com/gin-gonic/gin@v1.9.1".into())
+        );
+    }
+
+    #[test]
+    fn purl_composer() {
+        assert_eq!(
+            purl_to_url("pkg:composer/laravel/framework@10.0"),
+            Some("https://packagist.org/packages/laravel/framework#10.0".into())
+        );
+    }
+
+    #[test]
+    fn purl_hex() {
+        assert_eq!(
+            purl_to_url("pkg:hex/phoenix@1.7.7"),
+            Some("https://hex.pm/packages/phoenix/1.7.7".into())
+        );
+    }
+
+    #[test]
+    fn purl_cocoapods() {
+        assert_eq!(
+            purl_to_url("pkg:cocoapods/Alamofire@5.8.0"),
+            Some("https://cocoapods.org/pods/Alamofire".into())
+        );
+    }
+
+    #[test]
+    fn purl_pub() {
+        assert_eq!(
+            purl_to_url("pkg:pub/flutter@3.10.0"),
+            Some("https://pub.dev/packages/flutter/versions/3.10.0".into())
+        );
+    }
+
+    #[test]
+    fn purl_hackage() {
+        assert_eq!(
+            purl_to_url("pkg:hackage/aeson@2.1.0"),
+            Some("https://hackage.haskell.org/package/aeson-2.1.0".into())
+        );
+    }
+
+    #[test]
+    fn purl_cran() {
+        assert_eq!(
+            purl_to_url("pkg:cran/ggplot2@3.4.0"),
+            Some("https://cran.r-project.org/package=ggplot2".into())
+        );
+    }
+
+    #[test]
+    fn purl_swift() {
+        assert_eq!(
+            purl_to_url("pkg:swift/github.com/apple/swift-nio@2.50.0"),
+            Some("https://github.com/apple/swift-nio".into())
+        );
+    }
+
+    #[test]
+    fn purl_no_version() {
+        assert_eq!(
+            purl_to_url("pkg:pypi/requests"),
+            Some("https://pypi.org/project/requests/".into())
+        );
+    }
+
+    #[test]
+    fn purl_with_qualifiers() {
+        assert_eq!(
+            purl_to_url("pkg:cargo/serde@1.0.0?features=derive"),
+            Some("https://crates.io/crates/serde/1.0.0".into())
+        );
+    }
+
+    #[test]
+    fn purl_unknown_type() {
+        assert_eq!(purl_to_url("pkg:unknown/foo@1.0"), None);
+    }
+
+    #[test]
+    fn purl_invalid() {
+        assert_eq!(purl_to_url("not-a-purl"), None);
+    }
+
+    #[test]
+    fn purl_from_bom_pypi() {
+        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
+        let click = sbom
+            .components
+            .values()
+            .find(|c| c.name == "click")
+            .unwrap();
+        assert_eq!(
+            click.registry_url(),
+            Some("https://pypi.org/project/click/8.3.1/".into())
+        );
+    }
+
+    #[test]
+    fn purl_from_bom_cargo() {
+        let sbom = parse_sbom(Path::new("../bom.json")).expect("failed to parse bom.json");
+        // Find any cargo component
+        if let Some(cargo_comp) = sbom.components.values().find(|c| c.purl.contains("cargo")) {
+            let url = cargo_comp.registry_url().unwrap();
+            assert!(url.starts_with("https://crates.io/crates/"), "got: {url}");
+        }
     }
 }

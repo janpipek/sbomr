@@ -49,6 +49,31 @@ fn main() -> Result<()> {
     result
 }
 
+/// Open a URL in the default browser, platform-aware.
+fn open_url(url: &str) -> std::io::Result<std::process::ExitStatus> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).status()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(url).status()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .status()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "unsupported platform",
+        ))
+    }
+}
+
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut app::App,
@@ -60,6 +85,20 @@ fn run_loop(
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+
+            // Filter input mode captures all keys
+            if app.input_mode == app::InputMode::FilterInput {
+                match key.code {
+                    KeyCode::Enter => app.filter_input_confirm(),
+                    KeyCode::Esc => app.filter_input_cancel(),
+                    KeyCode::Backspace => app.filter_input_backspace(),
+                    KeyCode::Char(ch) => app.filter_input_char(ch),
+                    _ => {}
+                }
+                continue;
+            }
+
+            // Normal mode
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => {
                     app.should_quit = true;
@@ -97,6 +136,42 @@ fn run_loop(
                 KeyCode::Char('c') => {
                     if app.active_tab == app::Tab::Tree {
                         app.collapse_all();
+                    }
+                }
+                // Table sort/filter
+                KeyCode::Char('s') => {
+                    if app.active_tab == app::Tab::Table {
+                        app.cycle_sort_column();
+                    }
+                }
+                KeyCode::Char('S') => {
+                    if app.active_tab == app::Tab::Table {
+                        app.toggle_sort_direction();
+                    }
+                }
+                KeyCode::Char('/') => {
+                    if app.active_tab == app::Tab::Table {
+                        app.begin_filter_input();
+                    }
+                }
+                KeyCode::Char('f') => {
+                    if app.active_tab == app::Tab::Table {
+                        app.cycle_filter_column();
+                    }
+                }
+                KeyCode::Char('x') => {
+                    if app.active_tab == app::Tab::Table {
+                        app.clear_filter();
+                    }
+                }
+                // Open package registry URL in browser
+                KeyCode::Char('o') => {
+                    if let Some(bom_ref) = app.selected_bom_ref() {
+                        if let Some(comp) = app.sbom.components.get(bom_ref) {
+                            if let Some(url) = comp.registry_url() {
+                                let _ = open_url(&url);
+                            }
+                        }
                     }
                 }
                 _ => {}

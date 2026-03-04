@@ -13,7 +13,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, Tab};
+use crate::app::{App, InputMode, SortColumn, Tab};
 use crate::sbom::DepType;
 
 // ---------------------------------------------------------------------------
@@ -70,17 +70,27 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         frame.area(),
     );
 
-    let [header_area, tabs_area, main_area, detail_area, footer_area] = Layout::vertical([
-        Constraint::Length(3), // summary bar
-        Constraint::Length(1), // tabs
-        Constraint::Min(8),    // table or tree
-        Constraint::Length(5), // detail panel
-        Constraint::Length(1), // footer keybinds
-    ])
-    .areas(frame.area());
+    let show_filter_bar = app.active_tab == Tab::Table
+        && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
+    let filter_bar_height = if show_filter_bar { 1 } else { 0 };
+
+    let [header_area, tabs_area, filter_area, main_area, detail_area, footer_area] =
+        Layout::vertical([
+            Constraint::Length(3),                 // summary bar
+            Constraint::Length(1),                 // tabs
+            Constraint::Length(filter_bar_height), // filter bar (0 or 1)
+            Constraint::Min(8),                    // table or tree
+            Constraint::Length(5),                 // detail panel
+            Constraint::Length(1),                 // footer keybinds
+        ])
+        .areas(frame.area());
 
     draw_summary(frame, app, header_area);
     draw_tabs(frame, app, tabs_area);
+
+    if show_filter_bar {
+        draw_filter_bar(frame, app, filter_area);
+    }
 
     match app.active_tab {
         Tab::Table => draw_table(frame, app, main_area),
@@ -176,12 +186,20 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
 // Table tab
 // ---------------------------------------------------------------------------
 
+fn sort_header_cell(label: &str, col: SortColumn, app: &App) -> Cell<'static> {
+    if app.sort_column == col {
+        Cell::from(format!("{label} {}", app.sort_direction.indicator()))
+    } else {
+        Cell::from(label.to_string())
+    }
+}
+
 fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
     let header = Row::new(vec![
-        Cell::from("Name"),
-        Cell::from("Version"),
-        Cell::from("License"),
-        Cell::from("Type"),
+        sort_header_cell("Name", SortColumn::Name, app),
+        sort_header_cell("Version", SortColumn::Version, app),
+        sort_header_cell("License", SortColumn::License, app),
+        sort_header_cell("Type", SortColumn::Type, app),
         Cell::from("Scope"),
         Cell::from("Group"),
         Cell::from("Description"),
@@ -191,8 +209,7 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
     .bottom_margin(0);
 
     let rows: Vec<Row> = app
-        .sbom
-        .sorted_components
+        .visible_rows
         .iter()
         .enumerate()
         .map(|(i, bom_ref)| {
@@ -239,13 +256,23 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         Constraint::Min(20),
     ];
 
+    let title = if app.has_active_filter() {
+        format!(
+            " Dependencies ({}/{}) ",
+            app.visible_rows.len(),
+            app.sbom.components.len()
+        )
+    } else {
+        format!(" Dependencies ({}) ", app.sbom.components.len())
+    };
+
     let table = Table::new(rows, widths)
         .header(header)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER_ACTIVE))
-                .title(" Dependencies ")
+                .title(title)
                 .title_style(Style::default().fg(ACCENT).bold()),
         )
         .row_highlight_style(
@@ -275,6 +302,55 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
             &mut scrollbar_state,
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar
+// ---------------------------------------------------------------------------
+
+fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
+    let is_inputting = app.input_mode == InputMode::FilterInput;
+    let display_text = if is_inputting {
+        &app.filter_input_buf
+    } else {
+        &app.filter_text
+    };
+
+    let mut spans = vec![
+        Span::styled(
+            " Filter ",
+            Style::default().bold().fg(BG_SURFACE).bg(ACCENT),
+        ),
+        Span::styled(
+            format!(" {} ", app.filter_column.label()),
+            Style::default().fg(ACCENT).bold(),
+        ),
+        Span::styled("│ ", Style::default().fg(BORDER)),
+    ];
+
+    if display_text.is_empty() && !is_inputting {
+        spans.push(Span::styled(
+            "press / to filter",
+            Style::default().fg(TEXT_MUTED).italic(),
+        ));
+    } else {
+        spans.push(Span::styled(display_text, Style::default().fg(TEXT)));
+        if is_inputting {
+            spans.push(Span::styled("█", Style::default().fg(ACCENT)));
+        }
+    }
+
+    if !display_text.is_empty() && !is_inputting {
+        spans.push(Span::styled(
+            "  (x to clear)",
+            Style::default().fg(TEXT_MUTED),
+        ));
+    }
+
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+        area,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -473,10 +549,22 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
                     &comp.description,
                     Style::default().fg(TEXT_MUTED),
                 )),
-                Line::from(Span::styled(
-                    format!("purl: {}", comp.purl),
-                    Style::default().fg(TEXT_MUTED).italic(),
-                )),
+                Line::from({
+                    let mut info_spans = vec![Span::styled(
+                        format!("purl: {}", comp.purl),
+                        Style::default().fg(TEXT_MUTED).italic(),
+                    )];
+                    if let Some(url) = comp.registry_url() {
+                        info_spans.push(Span::styled("    ", Style::default()));
+                        info_spans.push(Span::styled(
+                            url,
+                            Style::default()
+                                .fg(ACCENT)
+                                .add_modifier(Modifier::UNDERLINED),
+                        ));
+                    }
+                    info_spans
+                }),
             ]
         } else {
             vec![Line::from("")]
@@ -506,6 +594,24 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let key_style = Style::default().bold().fg(BG_SURFACE).bg(TEXT_MUTED);
     let sep = Style::default().fg(TEXT_MUTED);
 
+    if app.input_mode == InputMode::FilterInput {
+        let spans = vec![
+            Span::styled(" Enter ", key_style),
+            Span::styled(" Apply  ", sep),
+            Span::styled(" Esc ", key_style),
+            Span::styled(" Cancel  ", sep),
+            Span::styled(
+                "  Type to filter...",
+                Style::default().fg(TEXT_MUTED).italic(),
+            ),
+        ];
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+            area,
+        );
+        return;
+    }
+
     let mut spans = vec![
         Span::styled(" q ", key_style),
         Span::styled(" Quit  ", sep),
@@ -513,9 +619,27 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(" Switch  ", sep),
         Span::styled(" ↑↓ ", key_style),
         Span::styled(" Navigate  ", sep),
-        Span::styled(" PgUp/Dn ", key_style),
-        Span::styled(" Page  ", sep),
+        Span::styled(" o ", key_style),
+        Span::styled(" Open URL  ", sep),
     ];
+    if app.active_tab == Tab::Table {
+        spans.extend([
+            Span::styled(" s ", key_style),
+            Span::styled(" Sort  ", sep),
+            Span::styled(" S ", key_style),
+            Span::styled(" Reverse  ", sep),
+            Span::styled(" / ", key_style),
+            Span::styled(" Filter  ", sep),
+            Span::styled(" f ", key_style),
+            Span::styled(" Filter Col  ", sep),
+        ]);
+        if app.has_active_filter() {
+            spans.extend([
+                Span::styled(" x ", key_style),
+                Span::styled(" Clear  ", sep),
+            ]);
+        }
+    }
     if app.active_tab == Tab::Tree {
         spans.extend([
             Span::styled(" Enter ", key_style),

@@ -1,6 +1,6 @@
 //! Application state and input handling.
 
-use crate::sbom::{SBOMData, TreeNode};
+use crate::sbom::{Component, SBOMData, TreeNode};
 use ratatui::widgets::TableState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +16,102 @@ impl Tab {
             Tab::Tree => Tab::Table,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Sort / Filter types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortColumn {
+    Name,
+    Version,
+    License,
+    Type,
+}
+
+#[allow(dead_code)]
+impl SortColumn {
+    pub const ALL: &[SortColumn] = &[
+        SortColumn::Name,
+        SortColumn::Version,
+        SortColumn::License,
+        SortColumn::Type,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SortColumn::Name => "Name",
+            SortColumn::Version => "Version",
+            SortColumn::License => "License",
+            SortColumn::Type => "Type",
+        }
+    }
+
+    /// Cycle to the next sort column.
+    pub fn next(self) -> Self {
+        let all = Self::ALL;
+        let idx = all.iter().position(|&c| c == self).unwrap_or(0);
+        all[(idx + 1) % all.len()]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl SortDirection {
+    pub fn toggle(self) -> Self {
+        match self {
+            SortDirection::Asc => SortDirection::Desc,
+            SortDirection::Desc => SortDirection::Asc,
+        }
+    }
+
+    pub fn indicator(self) -> &'static str {
+        match self {
+            SortDirection::Asc => "▲",
+            SortDirection::Desc => "▼",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterColumn {
+    Name,
+    License,
+    Type,
+}
+
+impl FilterColumn {
+    pub const ALL: &[FilterColumn] = &[
+        FilterColumn::Name,
+        FilterColumn::License,
+        FilterColumn::Type,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FilterColumn::Name => "Name",
+            FilterColumn::License => "License",
+            FilterColumn::Type => "Type",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        let all = Self::ALL;
+        let idx = all.iter().position(|&c| c == self).unwrap_or(0);
+        all[(idx + 1) % all.len()]
+    }
+}
+
+/// Whether the user is typing a filter string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    Normal,
+    FilterInput,
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +134,6 @@ impl StatefulNode {
         !self.children.is_empty()
     }
 
-    /// Recursively set expanded state on this node and all descendants.
     pub fn set_expanded_recursive(&mut self, expanded: bool) {
         self.expanded = expanded;
         for child in &mut self.children {
@@ -58,11 +153,7 @@ pub struct FlatTreeLine {
     pub is_last_child: bool,
     pub has_children: bool,
     pub expanded: bool,
-    /// Path of indices into the StatefulNode tree so we can find it for toggling.
     pub path: Vec<usize>,
-    /// For each ancestor depth (1..depth), whether to draw a vertical guide `│`.
-    /// `guides[i]` is true if the ancestor at depth `i+1` is NOT the last child
-    /// (i.e. there are more siblings below, so the vertical line continues).
     pub guides: Vec<bool>,
 }
 
@@ -73,13 +164,29 @@ pub struct FlatTreeLine {
 pub struct App {
     pub sbom: SBOMData,
     pub active_tab: Tab,
+    pub input_mode: InputMode,
+
+    // Table
     pub table_state: TableState,
+    /// The filtered+sorted list of bom-refs currently shown in the table.
+    pub visible_rows: Vec<String>,
+
+    // Sort
+    pub sort_column: SortColumn,
+    pub sort_direction: SortDirection,
+
+    // Filter
+    pub filter_column: FilterColumn,
+    pub filter_text: String,
+    /// Temporary buffer while the user is typing in FilterInput mode.
+    pub filter_input_buf: String,
+
+    // Tree
     pub tree_selected: usize,
     pub tree_scroll_offset: usize,
-    /// The persistent stateful tree (nodes remember expanded state).
     pub tree_roots: Vec<StatefulNode>,
-    /// Flattened visible lines, rebuilt after every expand/collapse.
     pub flat_tree: Vec<FlatTreeLine>,
+
     pub should_quit: bool,
 }
 
@@ -87,24 +194,30 @@ impl App {
     pub fn new(sbom: SBOMData) -> Self {
         let tree_roots = build_stateful_tree(&sbom.tree_roots);
         let flat_tree = flatten_visible(&tree_roots);
-        let mut table_state = TableState::default();
-        if !sbom.sorted_components.is_empty() {
-            table_state.select(Some(0));
-        }
-        App {
+
+        let mut app = App {
             sbom,
             active_tab: Tab::Table,
-            table_state,
+            input_mode: InputMode::Normal,
+            table_state: TableState::default(),
+            visible_rows: Vec::new(),
+            sort_column: SortColumn::Type,
+            sort_direction: SortDirection::Asc,
+            filter_column: FilterColumn::Name,
+            filter_text: String::new(),
+            filter_input_buf: String::new(),
             tree_selected: 0,
             tree_scroll_offset: 0,
             tree_roots,
             flat_tree,
             should_quit: false,
-        }
+        };
+        app.rebuild_visible_rows();
+        app
     }
 
     pub fn table_len(&self) -> usize {
-        self.sbom.sorted_components.len()
+        self.visible_rows.len()
     }
 
     pub fn tree_len(&self) -> usize {
@@ -118,8 +231,7 @@ impl App {
     pub fn selected_bom_ref(&self) -> Option<&str> {
         match self.active_tab {
             Tab::Table => self
-                .sbom
-                .sorted_components
+                .visible_rows
                 .get(self.table_selected())
                 .map(|s| s.as_str()),
             Tab::Tree => self
@@ -130,9 +242,122 @@ impl App {
         }
     }
 
+    pub fn has_active_filter(&self) -> bool {
+        !self.filter_text.is_empty()
+    }
+
+    // -- Sort / Filter ------------------------------------------------------
+
+    pub fn cycle_sort_column(&mut self) {
+        self.sort_column = self.sort_column.next();
+        self.rebuild_visible_rows();
+    }
+
+    pub fn toggle_sort_direction(&mut self) {
+        self.sort_direction = self.sort_direction.toggle();
+        self.rebuild_visible_rows();
+    }
+
+    pub fn cycle_filter_column(&mut self) {
+        self.filter_column = self.filter_column.next();
+        // Re-apply existing filter with new column
+        if self.has_active_filter() {
+            self.rebuild_visible_rows();
+        }
+    }
+
+    pub fn begin_filter_input(&mut self) {
+        self.input_mode = InputMode::FilterInput;
+        self.filter_input_buf = self.filter_text.clone();
+    }
+
+    pub fn filter_input_char(&mut self, ch: char) {
+        self.filter_input_buf.push(ch);
+    }
+
+    pub fn filter_input_backspace(&mut self) {
+        self.filter_input_buf.pop();
+    }
+
+    pub fn filter_input_confirm(&mut self) {
+        self.filter_text = self.filter_input_buf.clone();
+        self.input_mode = InputMode::Normal;
+        self.rebuild_visible_rows();
+    }
+
+    pub fn filter_input_cancel(&mut self) {
+        self.filter_input_buf.clear();
+        self.input_mode = InputMode::Normal;
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter_text.clear();
+        self.filter_input_buf.clear();
+        self.input_mode = InputMode::Normal;
+        self.rebuild_visible_rows();
+    }
+
+    /// Rebuild the visible_rows list based on current filter + sort settings.
+    fn rebuild_visible_rows(&mut self) {
+        let filter_lower = self.filter_text.to_lowercase();
+        let has_filter = !filter_lower.is_empty();
+
+        // 1. Filter
+        let mut rows: Vec<String> = self
+            .sbom
+            .sorted_components
+            .iter()
+            .filter(|bom_ref| {
+                if !has_filter {
+                    return true;
+                }
+                let comp = match self.sbom.components.get(*bom_ref) {
+                    Some(c) => c,
+                    None => return false,
+                };
+                match self.filter_column {
+                    FilterColumn::Name => comp.name.to_lowercase().contains(&filter_lower),
+                    FilterColumn::License => {
+                        comp.license_str().to_lowercase().contains(&filter_lower)
+                    }
+                    FilterColumn::Type => {
+                        comp.dep_type.label().to_lowercase().contains(&filter_lower)
+                    }
+                }
+            })
+            .cloned()
+            .collect();
+
+        // 2. Sort
+        let components = &self.sbom.components;
+        let sort_col = self.sort_column;
+        let sort_dir = self.sort_direction;
+
+        rows.sort_by(|a, b| {
+            let ca = &components[a];
+            let cb = &components[b];
+            let ord = compare_by_column(ca, cb, sort_col);
+            match sort_dir {
+                SortDirection::Asc => ord,
+                SortDirection::Desc => ord.reverse(),
+            }
+        });
+
+        self.visible_rows = rows;
+
+        // Reset selection
+        if self.visible_rows.is_empty() {
+            self.table_state.select(None);
+        } else {
+            let sel = self
+                .table_selected()
+                .min(self.visible_rows.len().saturating_sub(1));
+            self.table_state.select(Some(sel));
+        }
+    }
+
     // -- Tree expand/collapse -----------------------------------------------
 
-    /// Toggle the currently selected tree node between expanded and collapsed.
     pub fn toggle_selected(&mut self) {
         if let Some(line) = self.flat_tree.get(self.tree_selected) {
             if !line.has_children {
@@ -146,7 +371,6 @@ impl App {
         }
     }
 
-    /// Expand the currently selected node (no-op if leaf or already expanded).
     pub fn expand_selected(&mut self) {
         if let Some(line) = self.flat_tree.get(self.tree_selected) {
             if !line.has_children || line.expanded {
@@ -160,13 +384,10 @@ impl App {
         }
     }
 
-    /// Collapse the currently selected node. If it's a leaf or already collapsed,
-    /// jump to and collapse the parent instead.
     pub fn collapse_selected(&mut self) {
         if let Some(line) = self.flat_tree.get(self.tree_selected) {
             let path = line.path.clone();
 
-            // If it's expanded and has children, collapse it.
             if line.has_children && line.expanded {
                 if let Some(node) = self.node_at_path_mut(&path) {
                     node.expanded = false;
@@ -175,14 +396,12 @@ impl App {
                 return;
             }
 
-            // Otherwise, jump to parent and collapse it.
             if path.len() > 1 {
                 let parent_path = &path[..path.len() - 1];
                 if let Some(node) = self.node_at_path_mut(parent_path) {
                     node.expanded = false;
                 }
                 self.rebuild_flat_tree();
-                // Find the parent line and select it
                 let parent_path_vec = parent_path.to_vec();
                 if let Some(idx) = self
                     .flat_tree
@@ -195,7 +414,6 @@ impl App {
         }
     }
 
-    /// Expand all nodes in the tree.
     pub fn expand_all(&mut self) {
         for root in &mut self.tree_roots {
             root.set_expanded_recursive(true);
@@ -203,7 +421,6 @@ impl App {
         self.rebuild_flat_tree();
     }
 
-    /// Collapse all nodes in the tree.
     pub fn collapse_all(&mut self) {
         for root in &mut self.tree_roots {
             root.set_expanded_recursive(false);
@@ -225,7 +442,6 @@ impl App {
 
     fn rebuild_flat_tree(&mut self) {
         self.flat_tree = flatten_visible(&self.tree_roots);
-        // Clamp selection
         if self.tree_selected >= self.flat_tree.len() {
             self.tree_selected = self.flat_tree.len().saturating_sub(1);
         }
@@ -307,13 +523,32 @@ impl App {
         }
     }
 
-    /// Ensure the selected tree row is visible within the given viewport height.
     pub fn adjust_tree_scroll(&mut self, viewport_height: usize) {
         if self.tree_selected < self.tree_scroll_offset {
             self.tree_scroll_offset = self.tree_selected;
         } else if self.tree_selected >= self.tree_scroll_offset + viewport_height {
             self.tree_scroll_offset = self.tree_selected - viewport_height + 1;
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sort comparator
+// ---------------------------------------------------------------------------
+
+fn compare_by_column(a: &Component, b: &Component, col: SortColumn) -> std::cmp::Ordering {
+    match col {
+        SortColumn::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        SortColumn::Version => a.version.cmp(&b.version),
+        SortColumn::License => a
+            .license_str()
+            .to_lowercase()
+            .cmp(&b.license_str().to_lowercase()),
+        SortColumn::Type => a
+            .dep_type
+            .sort_key()
+            .cmp(&b.dep_type.sort_key())
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
     }
 }
 
@@ -367,8 +602,6 @@ fn flatten_visible(roots: &[StatefulNode]) -> Vec<FlatTreeLine> {
             guides: vec![],
         });
         if root.expanded {
-            // Children of a category root: the guide for depth-0 continues
-            // if this root is not the last category.
             let parent_guides = vec![!is_last];
             flatten_visible_children(&root.children, 1, &mut lines, &[i], &parent_guides);
         }
@@ -387,10 +620,6 @@ fn flatten_visible_children(
         let is_last = i == children.len() - 1;
         let mut path = parent_path.to_vec();
         path.push(i);
-
-        // Guides for this line: inherit parent guides (they tell us which
-        // ancestor columns need a vertical bar), but exclude the current
-        // depth — that is rendered as ├/└ by the drawing code.
         let guides = parent_guides.to_vec();
 
         lines.push(FlatTreeLine {
@@ -405,8 +634,6 @@ fn flatten_visible_children(
             guides: guides.clone(),
         });
         if child.expanded && child.has_children() {
-            // Extend guides for the next depth level: this child's column
-            // needs a vertical bar if it is NOT the last sibling.
             let mut child_guides = guides;
             child_guides.push(!is_last);
             flatten_visible_children(&child.children, depth + 1, lines, &path, &child_guides);
