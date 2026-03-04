@@ -36,6 +36,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let show_filter_bar = app.active_tab == Tab::Table
         && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
     let filter_bar_height = if show_filter_bar { 1 } else { 0 };
+    let detail_height = if app.active_tab == Tab::Json { 0 } else { 6 };
 
     let [
         header_area,
@@ -49,7 +50,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Constraint::Length(1),                 // tabs
         Constraint::Length(filter_bar_height), // filter bar (0 or 1)
         Constraint::Min(8),                    // table or tree
-        Constraint::Length(6),                 // detail panel
+        Constraint::Length(detail_height),     // detail panel (0 on JSON tab)
         Constraint::Length(1),                 // footer keybinds
     ])
     .areas(frame.area());
@@ -65,9 +66,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         Tab::Table => draw_table(frame, app, main_area, &c),
         Tab::Tree => draw_tree(frame, app, main_area, &c),
         Tab::Metadata => draw_metadata(frame, app, main_area, &c),
+        Tab::Json => draw_json(frame, app, main_area, &c),
     }
 
-    draw_detail(frame, app, detail_area, &c);
+    if detail_height > 0 {
+        draw_detail(frame, app, detail_area, &c);
+    }
     draw_footer(frame, app, footer_area, &c);
 }
 
@@ -171,11 +175,17 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 
 fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
-    let titles = vec![" Dependency List ", " Dependency Tree ", " Metadata "];
+    let titles = vec![
+        " Dependency List ",
+        " Dependency Tree ",
+        " Metadata ",
+        " JSON ",
+    ];
     let selected = match app.active_tab {
         Tab::Table => 0,
         Tab::Tree => 1,
         Tab::Metadata => 2,
+        Tab::Json => 3,
     };
     let tabs = Tabs::new(titles.clone())
         .select(selected)
@@ -191,7 +201,7 @@ fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 
     // Tabs widget renders: pad_left(1) + title + pad_right(1) + divider(1) per tab.
     // The last tab has no divider. Account for padding to align click areas correctly.
-    let tab_variants = [Tab::Table, Tab::Tree, Tab::Metadata];
+    let tab_variants = [Tab::Table, Tab::Tree, Tab::Metadata, Tab::Json];
     let area_end = area.x + area.width;
     let pad = 1u16; // default Tabs padding on each side
     let divider_w = 1u16;
@@ -783,6 +793,130 @@ fn draw_metadata(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) 
 }
 
 // ---------------------------------------------------------------------------
+// JSON tab
+// ---------------------------------------------------------------------------
+
+use crate::sbom::FlatJsonLine;
+
+/// Colour a JSON value string based on its content.
+fn style_json_value<'a>(text: &str, c: &ThemeColors) -> Span<'a> {
+    let t = text.trim();
+    if t.starts_with('"') {
+        Span::styled(text.to_string(), Style::default().fg(c.color_required))
+    } else if t == "true" || t == "false" {
+        Span::styled(text.to_string(), Style::default().fg(c.color_dev))
+    } else if t == "null" {
+        Span::styled(text.to_string(), Style::default().fg(c.color_error))
+    } else if t.starts_with('{') || t.starts_with('}') || t.starts_with('[') || t.starts_with(']') {
+        // Structural chars or collapsed summary
+        Span::styled(text.to_string(), Style::default().fg(c.text_muted))
+    } else if t
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_digit() || ch == '-')
+    {
+        Span::styled(text.to_string(), Style::default().fg(c.color_optional))
+    } else {
+        Span::styled(text.to_string(), Style::default().fg(c.text))
+    }
+}
+
+/// Build coloured spans for a single FlatJsonLine.
+fn render_json_line<'a>(line: &FlatJsonLine, c: &ThemeColors) -> Vec<Span<'a>> {
+    let mut spans = Vec::new();
+    // Indent
+    let indent = "  ".repeat(line.depth);
+    if !indent.is_empty() {
+        spans.push(Span::styled(indent, Style::default()));
+    }
+    // Collapse/expand indicator for collapsible nodes
+    if line.collapsible {
+        let icon = if line.expanded { "▼ " } else { "▶ " };
+        spans.push(Span::styled(icon, Style::default().fg(c.accent)));
+    }
+    // Key
+    if !line.key.is_empty() {
+        // Split into quoted key and colon-space
+        spans.push(Span::styled(
+            line.key.clone(),
+            Style::default().fg(c.accent),
+        ));
+    }
+    // Value
+    spans.push(style_json_value(&line.value, c));
+    // Trailing comma
+    if line.trailing_comma {
+        spans.push(Span::styled(",", Style::default().fg(c.text_muted)));
+    }
+    spans
+}
+
+fn draw_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    let visible_height = area.height.saturating_sub(2) as usize; // borders
+    app.adjust_json_scroll(visible_height);
+
+    // Record body area for mouse clicks
+    let body_y = area.y + 1;
+    let body_height = area.height.saturating_sub(2);
+    app.click_areas.json_body = Some(Rect::new(area.x, body_y, area.width, body_height));
+
+    let start = app.json_scroll_offset;
+    let end = (start + visible_height).min(app.json_len());
+
+    let lines: Vec<Line> = app.flat_json[start..end]
+        .iter()
+        .enumerate()
+        .map(|(vi, line)| {
+            let absolute_idx = start + vi;
+            let is_selected = absolute_idx == app.json_selected;
+            let spans = render_json_line(line, c);
+            let result = Line::from(spans);
+            if is_selected {
+                result.style(
+                    Style::default()
+                        .bg(c.bg_highlight)
+                        .fg(c.text_bright)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                result
+            }
+        })
+        .collect();
+
+    let title_bar = Rect::new(area.x, area.y, area.width, 1);
+    app.click_areas.panel_titles.push((title_bar, Tab::Table));
+
+    let first = start + 1;
+    let last = end;
+    let total = app.json_len();
+    let title = format!(" JSON  lines {first}-{last} / {total} ");
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(c.border_active))
+            .title(title)
+            .title_style(Style::default().fg(c.accent).bold()),
+    );
+    frame.render_widget(paragraph, area);
+
+    // Scrollbar
+    if app.json_len() > visible_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(app.json_len()).position(app.json_scroll_offset);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
+            area,
+            &mut scrollbar_state,
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Detail panel
 // ---------------------------------------------------------------------------
 
@@ -1033,6 +1167,18 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         }
     }
     if app.active_tab == Tab::Tree {
+        spans.extend([
+            Span::styled(" Enter ", key_style),
+            Span::styled(" Toggle  ", sep),
+            Span::styled(" ←→ ", key_style),
+            Span::styled(" Collapse/Expand  ", sep),
+            Span::styled(" e ", key_style),
+            Span::styled(" Expand All  ", sep),
+            Span::styled(" c ", key_style),
+            Span::styled(" Collapse All  ", sep),
+        ]);
+    }
+    if app.active_tab == Tab::Json {
         spans.extend([
             Span::styled(" Enter ", key_style),
             Span::styled(" Toggle  ", sep),

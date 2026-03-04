@@ -409,6 +409,197 @@ pub struct SBOMData {
     pub sorted_components: Vec<String>,          // bom-refs sorted for table
     pub tree_roots: Vec<TreeNode>,               // top-level tree categories
     pub metadata: SBOMMetadata,
+    pub json_root: JsonNode, // collapsible JSON tree for the JSON viewer
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible JSON tree
+// ---------------------------------------------------------------------------
+
+/// The kind of JSON container (object or array), or a leaf value.
+#[derive(Debug, Clone)]
+pub enum JsonNodeKind {
+    Object,
+    Array,
+    Leaf(String), // rendered value text, e.g. `"hello"`, `42`, `true`, `null`
+}
+
+/// A node in the collapsible JSON tree.
+#[derive(Debug, Clone)]
+pub struct JsonNode {
+    /// If this node is a value inside an object, the key name (without quotes).
+    pub key: Option<String>,
+    pub kind: JsonNodeKind,
+    pub children: Vec<JsonNode>,
+    pub expanded: bool,
+    /// Number of leaf descendant nodes (for collapsed summary).
+    pub child_count: usize,
+}
+
+/// A single visible line produced by flattening the JSON tree.
+#[derive(Debug, Clone)]
+pub struct FlatJsonLine {
+    pub depth: usize,
+    /// The key portion, e.g. `"name": ` — empty for array items.
+    pub key: String,
+    /// The value portion for this line (opening brace, leaf value, closing brace).
+    pub value: String,
+    /// Whether this node can be expanded/collapsed.
+    pub collapsible: bool,
+    pub expanded: bool,
+    /// Path of child indices from the root to this node, for toggle.
+    pub path: Vec<usize>,
+    /// Whether a trailing comma should follow this line.
+    pub trailing_comma: bool,
+}
+
+fn value_to_json_node(key: Option<String>, value: &serde_json::Value, depth: usize) -> JsonNode {
+    match value {
+        serde_json::Value::Object(map) => {
+            let children: Vec<JsonNode> = map
+                .iter()
+                .map(|(k, v)| value_to_json_node(Some(k.clone()), v, depth + 1))
+                .collect();
+            let child_count = children.len();
+            JsonNode {
+                key,
+                kind: JsonNodeKind::Object,
+                children,
+                expanded: depth == 0,
+                child_count,
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            let children: Vec<JsonNode> = arr
+                .iter()
+                .map(|v| value_to_json_node(None, v, depth + 1))
+                .collect();
+            let child_count = children.len();
+            JsonNode {
+                key,
+                kind: JsonNodeKind::Array,
+                children,
+                expanded: depth == 0,
+                child_count,
+            }
+        }
+        other => {
+            // Leaf: render as JSON text
+            let text = match other {
+                serde_json::Value::String(s) => {
+                    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                }
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Null => "null".to_string(),
+                _ => other.to_string(),
+            };
+            JsonNode {
+                key,
+                kind: JsonNodeKind::Leaf(text),
+                children: Vec::new(),
+                expanded: false,
+                child_count: 0,
+            }
+        }
+    }
+}
+
+pub fn build_json_tree(value: &serde_json::Value) -> JsonNode {
+    value_to_json_node(None, value, 0)
+}
+
+/// Flatten the JSON tree into visible lines, respecting collapsed state.
+pub fn flatten_json(node: &JsonNode) -> Vec<FlatJsonLine> {
+    let mut lines = Vec::new();
+    flatten_json_node(node, 0, &[], false, &mut lines);
+    lines
+}
+
+fn flatten_json_node(
+    node: &JsonNode,
+    depth: usize,
+    path: &[usize],
+    trailing_comma: bool,
+    lines: &mut Vec<FlatJsonLine>,
+) {
+    let key_str = node
+        .key
+        .as_ref()
+        .map(|k| format!("\"{k}\": "))
+        .unwrap_or_default();
+
+    match &node.kind {
+        JsonNodeKind::Leaf(text) => {
+            lines.push(FlatJsonLine {
+                depth,
+                key: key_str,
+                value: text.clone(),
+                collapsible: false,
+                expanded: false,
+                path: path.to_vec(),
+                trailing_comma,
+            });
+        }
+        JsonNodeKind::Object | JsonNodeKind::Array => {
+            let (open, close) = match &node.kind {
+                JsonNodeKind::Object => ("{", "}"),
+                JsonNodeKind::Array => ("[", "]"),
+                _ => unreachable!(),
+            };
+
+            if !node.expanded {
+                // Collapsed: single line like `{ ... 5 items }` or `[ ... 3 items ]`
+                let summary = format!(
+                    "{open} ... {} {} {close}",
+                    node.child_count,
+                    if node.child_count == 1 {
+                        "item"
+                    } else {
+                        "items"
+                    }
+                );
+                lines.push(FlatJsonLine {
+                    depth,
+                    key: key_str,
+                    value: summary,
+                    collapsible: true,
+                    expanded: false,
+                    path: path.to_vec(),
+                    trailing_comma,
+                });
+            } else {
+                // Expanded: opening brace, children, closing brace
+                lines.push(FlatJsonLine {
+                    depth,
+                    key: key_str,
+                    value: open.to_string(),
+                    collapsible: !node.children.is_empty(),
+                    expanded: true,
+                    path: path.to_vec(),
+                    trailing_comma: false,
+                });
+
+                let child_count = node.children.len();
+                for (i, child) in node.children.iter().enumerate() {
+                    let mut child_path = path.to_vec();
+                    child_path.push(i);
+                    let is_last = i + 1 == child_count;
+                    flatten_json_node(child, depth + 1, &child_path, !is_last, lines);
+                }
+
+                lines.push(FlatJsonLine {
+                    depth,
+                    key: String::new(),
+                    value: close.to_string(),
+                    collapsible: false,
+                    expanded: false,
+                    path: path.to_vec(),
+                    trailing_comma,
+                });
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -443,7 +634,10 @@ fn get_property(props: &[RawProperty], name: &str) -> Option<String> {
 
 pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
     let content = fs::read_to_string(path)?;
-    let raw: RawBom = serde_json::from_str(&content)?;
+    // Parse into Value for the JSON viewer tree and pretty-print for copy-all
+    let json_value: serde_json::Value = serde_json::from_str(&content)?;
+    let json_root = build_json_tree(&json_value);
+    let raw: RawBom = serde_json::from_value(json_value)?;
 
     // --- SBOM-level metadata ---
     let meta = raw.metadata.as_ref();
@@ -702,6 +896,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         sorted_components,
         tree_roots,
         metadata: sbom_metadata,
+        json_root,
     })
 }
 

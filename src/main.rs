@@ -14,7 +14,28 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 
+/// Restore the terminal to a sane state (raw mode off, alternate screen off,
+/// mouse capture off, cursor visible).  Called both on normal exit and from
+/// the panic hook so that a crash never leaves the terminal broken.
+fn restore_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        io::stdout(),
+        LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture
+    );
+    let _ = crossterm::execute!(io::stdout(), crossterm::cursor::Show);
+}
+
 fn main() -> Result<()> {
+    // Install a panic hook that restores the terminal *before* printing the
+    // panic message, so the user sees it in their normal shell.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        restore_terminal();
+        default_hook(info);
+    }));
+
     color_eyre::install()?;
 
     // Determine SBOM file path from args (default: bom.json)
@@ -55,14 +76,8 @@ fn main() -> Result<()> {
     // Main loop
     let result = run_loop(&mut terminal, &mut app);
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        crossterm::event::DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
+    // Restore terminal on normal exit
+    restore_terminal();
 
     result
 }
@@ -153,6 +168,22 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
                     }
                 }
             }
+
+            // 6. Check JSON body clicks
+            if app.active_tab == app::Tab::Json
+                && let Some(body) = app.click_areas.json_body
+                && in_rect(col, row, body)
+            {
+                let clicked_row = (row - body.y) as usize + app.json_scroll_offset;
+                if clicked_row < app.json_len() {
+                    if clicked_row == app.json_selected {
+                        // Re-click toggles expand/collapse
+                        app.toggle_json_selected();
+                    } else {
+                        app.json_selected = clicked_row;
+                    }
+                }
+            }
         }
         MouseEventKind::ScrollUp => app.move_up(),
         MouseEventKind::ScrollDown => app.move_down(),
@@ -199,32 +230,32 @@ fn run_loop(
                     KeyCode::PageDown => app.page_down(10),
                     KeyCode::Home | KeyCode::Char('g') => app.home(),
                     KeyCode::End | KeyCode::Char('G') => app.end(),
-                    // Tree expand/collapse
-                    KeyCode::Enter | KeyCode::Char(' ') => {
-                        if app.active_tab == app::Tab::Tree {
-                            app.toggle_selected();
-                        }
-                    }
-                    KeyCode::Right | KeyCode::Char('l') => {
-                        if app.active_tab == app::Tab::Tree {
-                            app.expand_selected();
-                        }
-                    }
-                    KeyCode::Left | KeyCode::Char('h') => {
-                        if app.active_tab == app::Tab::Tree {
-                            app.collapse_selected();
-                        }
-                    }
-                    KeyCode::Char('e') => {
-                        if app.active_tab == app::Tab::Tree {
-                            app.expand_all();
-                        }
-                    }
-                    KeyCode::Char('c') => {
-                        if app.active_tab == app::Tab::Tree {
-                            app.collapse_all();
-                        }
-                    }
+                    // Tree / JSON expand/collapse
+                    KeyCode::Enter | KeyCode::Char(' ') => match app.active_tab {
+                        app::Tab::Tree => app.toggle_selected(),
+                        app::Tab::Json => app.toggle_json_selected(),
+                        _ => {}
+                    },
+                    KeyCode::Right | KeyCode::Char('l') => match app.active_tab {
+                        app::Tab::Tree => app.expand_selected(),
+                        app::Tab::Json => app.expand_json_selected(),
+                        _ => {}
+                    },
+                    KeyCode::Left | KeyCode::Char('h') => match app.active_tab {
+                        app::Tab::Tree => app.collapse_selected(),
+                        app::Tab::Json => app.collapse_json_selected(),
+                        _ => {}
+                    },
+                    KeyCode::Char('e') => match app.active_tab {
+                        app::Tab::Tree => app.expand_all(),
+                        app::Tab::Json => app.expand_all_json(),
+                        _ => {}
+                    },
+                    KeyCode::Char('c') => match app.active_tab {
+                        app::Tab::Tree => app.collapse_all(),
+                        app::Tab::Json => app.collapse_all_json(),
+                        _ => {}
+                    },
                     // Table sort/filter
                     KeyCode::Char('s') => {
                         if app.active_tab == app::Tab::Table {

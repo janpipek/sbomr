@@ -17,6 +17,10 @@ test:
 build:
     cargo build --release
 
+# Install locally
+install:
+    cargo install --path .
+
 # Publish to crates.io (dry-run first, then publish)
 publish: fmt clippy test
     cargo publish --dry-run

@@ -1,6 +1,8 @@
 //! Application state and input handling.
 
-use crate::sbom::{Component, SBOMData, TreeNode};
+use crate::sbom::{
+    Component, FlatJsonLine, JsonNode, JsonNodeKind, SBOMData, TreeNode, flatten_json,
+};
 use crate::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
@@ -10,6 +12,7 @@ pub enum Tab {
     Table,
     Tree,
     Metadata,
+    Json,
 }
 
 impl Tab {
@@ -17,7 +20,8 @@ impl Tab {
         match self {
             Tab::Table => Tab::Tree,
             Tab::Tree => Tab::Metadata,
-            Tab::Metadata => Tab::Table,
+            Tab::Metadata => Tab::Json,
+            Tab::Json => Tab::Table,
         }
     }
 }
@@ -179,6 +183,8 @@ pub struct ClickAreas {
     pub table_body: Option<Rect>,
     /// Area of the tree body (rows)
     pub tree_body: Option<Rect>,
+    /// Area of the JSON viewer body (rows)
+    pub json_body: Option<Rect>,
     /// Panel title bars that act as tab switches: (area, Tab)
     pub panel_titles: Vec<(Rect, Tab)>,
 }
@@ -214,6 +220,12 @@ pub struct App {
     pub tree_roots: Vec<StatefulNode>,
     pub flat_tree: Vec<FlatTreeLine>,
 
+    // JSON viewer (collapsible tree)
+    pub json_root: JsonNode,
+    pub flat_json: Vec<FlatJsonLine>,
+    pub json_selected: usize,
+    pub json_scroll_offset: usize,
+
     /// Areas saved after each draw for mouse click handling.
     pub click_areas: ClickAreas,
 
@@ -224,6 +236,8 @@ impl App {
     pub fn new(sbom: SBOMData, theme: Theme) -> Self {
         let tree_roots = build_stateful_tree(&sbom.tree_roots);
         let flat_tree = flatten_visible(&tree_roots);
+        let json_root = sbom.json_root.clone();
+        let flat_json = flatten_json(&json_root);
 
         let mut app = App {
             sbom,
@@ -241,6 +255,10 @@ impl App {
             tree_scroll_offset: 0,
             tree_roots,
             flat_tree,
+            json_root,
+            flat_json,
+            json_selected: 0,
+            json_scroll_offset: 0,
             click_areas: ClickAreas::default(),
             should_quit: false,
         };
@@ -271,7 +289,7 @@ impl App {
                 .get(self.tree_selected)
                 .filter(|l| !l.bom_ref.is_empty())
                 .map(|l| l.bom_ref.as_str()),
-            Tab::Metadata => None,
+            Tab::Metadata | Tab::Json => None,
         }
     }
 
@@ -497,6 +515,10 @@ impl App {
 
     // -- Navigation ---------------------------------------------------------
 
+    pub fn json_len(&self) -> usize {
+        self.flat_json.len()
+    }
+
     pub fn move_up(&mut self) {
         match self.active_tab {
             Tab::Table => {
@@ -508,6 +530,11 @@ impl App {
             Tab::Tree => {
                 if self.tree_selected > 0 {
                     self.tree_selected -= 1;
+                }
+            }
+            Tab::Json => {
+                if self.json_selected > 0 {
+                    self.json_selected -= 1;
                 }
             }
             Tab::Metadata => {}
@@ -527,6 +554,11 @@ impl App {
                     self.tree_selected += 1;
                 }
             }
+            Tab::Json => {
+                if self.json_selected + 1 < self.json_len() {
+                    self.json_selected += 1;
+                }
+            }
             Tab::Metadata => {}
         }
     }
@@ -539,6 +571,9 @@ impl App {
             }
             Tab::Tree => {
                 self.tree_selected = self.tree_selected.saturating_sub(page_size);
+            }
+            Tab::Json => {
+                self.json_selected = self.json_selected.saturating_sub(page_size);
             }
             Tab::Metadata => {}
         }
@@ -555,6 +590,10 @@ impl App {
                 let max = self.tree_len().saturating_sub(1);
                 self.tree_selected = (self.tree_selected + page_size).min(max);
             }
+            Tab::Json => {
+                let max = self.json_len().saturating_sub(1);
+                self.json_selected = (self.json_selected + page_size).min(max);
+            }
             Tab::Metadata => {}
         }
     }
@@ -563,6 +602,7 @@ impl App {
         match self.active_tab {
             Tab::Table => self.table_state.select(Some(0)),
             Tab::Tree => self.tree_selected = 0,
+            Tab::Json => self.json_selected = 0,
             Tab::Metadata => {}
         }
     }
@@ -573,7 +613,113 @@ impl App {
                 .table_state
                 .select(Some(self.table_len().saturating_sub(1))),
             Tab::Tree => self.tree_selected = self.tree_len().saturating_sub(1),
+            Tab::Json => self.json_selected = self.json_len().saturating_sub(1),
             Tab::Metadata => {}
+        }
+    }
+
+    pub fn adjust_json_scroll(&mut self, viewport_height: usize) {
+        if self.json_selected < self.json_scroll_offset {
+            self.json_scroll_offset = self.json_selected;
+        } else if self.json_selected >= self.json_scroll_offset + viewport_height {
+            self.json_scroll_offset = self.json_selected - viewport_height + 1;
+        }
+    }
+
+    // -- JSON tree expand/collapse ------------------------------------------
+
+    fn json_node_at_path_mut<'a>(
+        node: &'a mut JsonNode,
+        path: &[usize],
+    ) -> Option<&'a mut JsonNode> {
+        if path.is_empty() {
+            return Some(node);
+        }
+        let mut current = node;
+        for &idx in path {
+            current = current.children.get_mut(idx)?;
+        }
+        Some(current)
+    }
+
+    pub fn toggle_json_selected(&mut self) {
+        if let Some(line) = self.flat_json.get(self.json_selected) {
+            if !line.collapsible {
+                return;
+            }
+            let path = line.path.clone();
+            if let Some(node) = Self::json_node_at_path_mut(&mut self.json_root, &path) {
+                node.expanded = !node.expanded;
+            }
+            self.rebuild_flat_json();
+        }
+    }
+
+    pub fn expand_json_selected(&mut self) {
+        if let Some(line) = self.flat_json.get(self.json_selected) {
+            if !line.collapsible || line.expanded {
+                return;
+            }
+            let path = line.path.clone();
+            if let Some(node) = Self::json_node_at_path_mut(&mut self.json_root, &path) {
+                node.expanded = true;
+            }
+            self.rebuild_flat_json();
+        }
+    }
+
+    pub fn collapse_json_selected(&mut self) {
+        if let Some(line) = self.flat_json.get(self.json_selected) {
+            if line.collapsible && line.expanded {
+                let path = line.path.clone();
+                if let Some(node) = Self::json_node_at_path_mut(&mut self.json_root, &path) {
+                    node.expanded = false;
+                }
+                self.rebuild_flat_json();
+                return;
+            }
+            // If on a leaf or collapsed node, collapse the parent
+            if !line.path.is_empty() {
+                let parent_path = &line.path[..line.path.len() - 1];
+                if let Some(node) = Self::json_node_at_path_mut(&mut self.json_root, parent_path)
+                    && matches!(node.kind, JsonNodeKind::Object | JsonNodeKind::Array)
+                {
+                    node.expanded = false;
+                }
+                let pp = parent_path.to_vec();
+                self.rebuild_flat_json();
+                // Move selection to the collapsed parent
+                if let Some(idx) = self.flat_json.iter().position(|l| l.path == pp) {
+                    self.json_selected = idx;
+                }
+            }
+        }
+    }
+
+    fn set_json_expanded_recursive(node: &mut JsonNode, expanded: bool) {
+        if matches!(node.kind, JsonNodeKind::Object | JsonNodeKind::Array) {
+            node.expanded = expanded;
+        }
+        for child in &mut node.children {
+            Self::set_json_expanded_recursive(child, expanded);
+        }
+    }
+
+    pub fn expand_all_json(&mut self) {
+        Self::set_json_expanded_recursive(&mut self.json_root, true);
+        self.rebuild_flat_json();
+    }
+
+    pub fn collapse_all_json(&mut self) {
+        Self::set_json_expanded_recursive(&mut self.json_root, false);
+        self.rebuild_flat_json();
+        self.json_selected = self.json_selected.min(self.json_len().saturating_sub(1));
+    }
+
+    fn rebuild_flat_json(&mut self) {
+        self.flat_json = flatten_json(&self.json_root);
+        if self.json_selected >= self.flat_json.len() {
+            self.json_selected = self.flat_json.len().saturating_sub(1);
         }
     }
 
