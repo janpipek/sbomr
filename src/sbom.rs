@@ -362,6 +362,12 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .clone()
             .or_else(|| rc.purl.clone())
             .unwrap_or_default();
+
+        // Skip the root component itself — it's not a dependency.
+        if bom_ref == root_ref {
+            continue;
+        }
+
         let name = rc.name.clone().unwrap_or_default();
         let version = rc.version.clone().unwrap_or_default();
         let description = rc.description.clone().unwrap_or_default();
