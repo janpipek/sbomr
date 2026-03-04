@@ -1,4 +1,6 @@
 //! Terminal UI rendering with ratatui.
+//!
+//! Colour palette is designed to match the Textual (Python) dark theme.
 
 use ratatui::{
     layout::{Constraint, Layout, Rect},
@@ -14,14 +16,60 @@ use ratatui::{
 use crate::app::{App, Tab};
 use crate::sbom::DepType;
 
-// Colours for dependency types
-const COLOR_REQUIRED: Color = Color::Green;
-const COLOR_DEV: Color = Color::Yellow;
-const COLOR_OPTIONAL: Color = Color::Magenta;
-const COLOR_TRANSITIVE: Color = Color::DarkGray;
-const COLOR_LICENSE_NONE: Color = Color::Red;
+// ---------------------------------------------------------------------------
+// Colour palette — mirrors Textual's dark theme tokens
+// ---------------------------------------------------------------------------
+
+/// Surface / main background (Textual $surface)
+const BG_SURFACE: Color = Color::Rgb(30, 30, 30);
+/// Slightly lighter surface for alternating rows / panels (Textual $surface-lighten-1)
+const BG_SURFACE_ALT: Color = Color::Rgb(38, 38, 38);
+/// Summary bar background (Textual $primary-background)
+const BG_PRIMARY: Color = Color::Rgb(0, 45, 80);
+/// Detail panel background (Textual $panel)
+const BG_PANEL: Color = Color::Rgb(35, 35, 40);
+/// Selection / highlight row
+const BG_HIGHLIGHT: Color = Color::Rgb(0, 80, 140);
+
+/// Primary accent (Textual $primary — dodger blue)
+const ACCENT: Color = Color::Rgb(0, 135, 255);
+/// Secondary text / muted (Textual $text-muted)
+const TEXT_MUTED: Color = Color::Rgb(135, 135, 135);
+/// Normal text
+const TEXT: Color = Color::Rgb(220, 220, 220);
+/// Bright text on highlight
+const TEXT_BRIGHT: Color = Color::Rgb(255, 255, 255);
+
+/// $success — green for required deps
+const COLOR_REQUIRED: Color = Color::Rgb(80, 200, 120);
+/// $warning — amber for dev deps
+const COLOR_DEV: Color = Color::Rgb(255, 183, 77);
+/// #ab47bc — purple for optional deps (same hex as Textual CSS)
+const COLOR_OPTIONAL: Color = Color::Rgb(171, 71, 188);
+/// Muted for transitive deps
+const COLOR_TRANSITIVE: Color = TEXT_MUTED;
+/// $error — red for missing licenses
+const COLOR_ERROR: Color = Color::Rgb(230, 80, 80);
+
+/// Border colour (subtle)
+const BORDER: Color = Color::Rgb(60, 60, 60);
+/// Border colour for focused/active panels
+const BORDER_ACTIVE: Color = Color::Rgb(80, 80, 90);
+
+/// Tree guide lines
+const TREE_GUIDE: Color = Color::Rgb(70, 70, 70);
+
+// ---------------------------------------------------------------------------
+// Top-level draw
+// ---------------------------------------------------------------------------
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
+    // Fill the entire screen with the surface background
+    frame.render_widget(
+        Block::default().style(Style::default().bg(BG_SURFACE)),
+        frame.area(),
+    );
+
     let [header_area, tabs_area, main_area, detail_area, footer_area] = Layout::vertical([
         Constraint::Length(3), // summary bar
         Constraint::Length(1), // tabs
@@ -65,32 +113,37 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect) {
 
     let text = Line::from(vec![
         Span::styled(
-            format!(" {} ", app.sbom.root_name),
-            Style::default().bold().fg(Color::Cyan),
+            format!("  {} ", app.sbom.root_name),
+            Style::default().bold().fg(TEXT_BRIGHT),
         ),
-        Span::raw(format!("v{}  ", app.sbom.root_version)),
-        Span::styled("Components: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(format!("{total}"), Style::default().bold()),
-        Span::raw("  "),
-        Span::styled("Direct: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("v{}", app.sbom.root_version),
+            Style::default().fg(TEXT_MUTED),
+        ),
+        Span::raw("    "),
+        Span::styled("Components ", Style::default().fg(TEXT_MUTED)),
+        Span::styled(format!("{total}"), Style::default().bold().fg(TEXT)),
+        Span::raw("    "),
+        Span::styled("Direct ", Style::default().fg(TEXT_MUTED)),
         Span::styled(
             format!("{direct}"),
             Style::default().bold().fg(COLOR_REQUIRED),
         ),
-        Span::raw("  "),
-        Span::styled("Dev/Tool: ", Style::default().fg(Color::DarkGray)),
+        Span::raw("    "),
+        Span::styled("Dev/Tool ", Style::default().fg(TEXT_MUTED)),
         Span::styled(format!("{dev}"), Style::default().bold().fg(COLOR_DEV)),
-        Span::raw("  "),
-        Span::styled("Licenses: ", Style::default().fg(Color::DarkGray)),
+        Span::raw("    "),
+        Span::styled("Licenses ", Style::default().fg(TEXT_MUTED)),
         Span::styled(
             format!("{} unique", unique_licenses.len()),
-            Style::default().bold(),
+            Style::default().bold().fg(TEXT),
         ),
     ]);
 
     let block = Block::default()
+        .style(Style::default().bg(BG_PRIMARY))
         .borders(Borders::BOTTOM)
-        .border_style(Style::default().fg(Color::DarkGray))
+        .border_style(Style::default().fg(ACCENT))
         .padding(Padding::new(0, 0, 1, 0));
     let paragraph = Paragraph::new(text).block(block);
     frame.render_widget(paragraph, area);
@@ -108,9 +161,14 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
     };
     let tabs = Tabs::new(titles)
         .select(selected)
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::Cyan).bold().underlined())
-        .divider("|");
+        .style(Style::default().fg(TEXT_MUTED).bg(BG_SURFACE))
+        .highlight_style(
+            Style::default()
+                .fg(ACCENT)
+                .bold()
+                .add_modifier(Modifier::UNDERLINED),
+        )
+        .divider(Span::styled("│", Style::default().fg(BORDER)));
     frame.render_widget(tabs, area);
 }
 
@@ -119,7 +177,6 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
 // ---------------------------------------------------------------------------
 
 fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
-    let header_style = Style::default().bold().fg(Color::Cyan);
     let header = Row::new(vec![
         Cell::from("Name"),
         Cell::from("Version"),
@@ -129,37 +186,46 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         Cell::from("Group"),
         Cell::from("Description"),
     ])
-    .style(header_style)
-    .height(1);
+    .style(Style::default().bold().fg(ACCENT).bg(BG_SURFACE_ALT))
+    .height(1)
+    .bottom_margin(0);
 
     let rows: Vec<Row> = app
         .sbom
         .sorted_components
         .iter()
-        .map(|bom_ref| {
+        .enumerate()
+        .map(|(i, bom_ref)| {
             let comp = &app.sbom.components[bom_ref];
             let type_color = dep_type_color(&comp.dep_type);
 
             let license_style = if comp.licenses.is_empty() {
-                Style::default().fg(COLOR_LICENSE_NONE).italic()
+                Style::default().fg(COLOR_ERROR).italic()
             } else {
-                Style::default()
+                Style::default().fg(TEXT)
+            };
+
+            let row_bg = if i % 2 == 1 {
+                BG_SURFACE_ALT
+            } else {
+                BG_SURFACE
             };
 
             Row::new(vec![
-                Cell::from(comp.name.clone()),
-                Cell::from(comp.version.clone()).style(Style::default().fg(Color::DarkGray)),
+                Cell::from(comp.name.clone()).style(Style::default().fg(TEXT)),
+                Cell::from(comp.version.clone()).style(Style::default().fg(TEXT_MUTED)),
                 Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.dep_type.label()).style(Style::default().fg(type_color)),
-                Cell::from(comp.scope.clone()),
+                Cell::from(comp.scope.clone()).style(Style::default().fg(TEXT_MUTED)),
                 Cell::from(if comp.dep_group.is_empty() {
                     "-".to_string()
                 } else {
                     comp.dep_group.clone()
-                }),
-                Cell::from(truncate(&comp.description, 50))
-                    .style(Style::default().fg(Color::DarkGray)),
+                })
+                .style(Style::default().fg(TEXT_MUTED)),
+                Cell::from(truncate(&comp.description, 50)).style(Style::default().fg(TEXT_MUTED)),
             ])
+            .style(Style::default().bg(row_bg))
         })
         .collect();
 
@@ -178,14 +244,14 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
+                .border_style(Style::default().fg(BORDER_ACTIVE))
                 .title(" Dependencies ")
-                .title_style(Style::default().fg(Color::Cyan).bold()),
+                .title_style(Style::default().fg(ACCENT).bold()),
         )
         .row_highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
-                .fg(Color::White)
+                .bg(BG_HIGHLIGHT)
+                .fg(TEXT_BRIGHT)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
@@ -202,7 +268,9 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect) {
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼")),
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(BORDER))
+                .thumb_style(Style::default().fg(TEXT_MUTED)),
             area,
             &mut scrollbar_state,
         );
@@ -230,14 +298,8 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
             let mut spans = Vec::new();
 
             if line.is_category {
-                // Category header (bold, colored)
-                let color = if line.label.contains("required") {
-                    COLOR_REQUIRED
-                } else if line.label.contains("dev") {
-                    COLOR_DEV
-                } else {
-                    COLOR_OPTIONAL
-                };
+                // Category header (bold, coloured)
+                let color = category_color(&line.label);
                 let chevron = if !line.has_children {
                     "  "
                 } else if line.expanded {
@@ -254,7 +316,10 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                     Style::default().fg(color).bold(),
                 ));
                 if !line.expanded && line.has_children {
-                    spans.push(Span::styled(" ...", Style::default().fg(Color::DarkGray)));
+                    spans.push(Span::styled(
+                        " ...",
+                        Style::default().fg(TEXT_MUTED).italic(),
+                    ));
                 }
             } else {
                 // Build indent with proper vertical guide lines
@@ -273,56 +338,65 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
                 };
                 spans.push(Span::styled(
                     format!("{indent}{connector}"),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(TREE_GUIDE),
                 ));
 
                 // Expand/collapse icon for nodes with children
                 if line.has_children {
                     let icon = if line.expanded { "▼ " } else { "▶ " };
-                    spans.push(Span::styled(icon, Style::default().fg(Color::Cyan)));
+                    spans.push(Span::styled(icon, Style::default().fg(ACCENT)));
                 } else {
                     spans.push(Span::styled("  ", Style::default()));
                 }
 
-                // Parse label to colorize: "name version  [license]"
+                // Parse label: "name version  [license]"
                 if let Some((name_ver, license_part)) = line.label.split_once("  [") {
                     let license = license_part.trim_end_matches(']');
-                    spans.push(Span::styled(
-                        name_ver.to_string(),
-                        Style::default().fg(Color::White),
-                    ));
+                    // Split name and version
+                    if let Some((name, version)) = name_ver.rsplit_once(' ') {
+                        spans.push(Span::styled(name, Style::default().fg(TEXT)));
+                        spans.push(Span::styled(
+                            format!(" {version}"),
+                            Style::default().fg(TEXT_MUTED),
+                        ));
+                    } else {
+                        spans.push(Span::styled(name_ver, Style::default().fg(TEXT)));
+                    }
                     spans.push(Span::raw("  "));
                     let lic_color = if license == "(none)" {
-                        COLOR_LICENSE_NONE
+                        COLOR_ERROR
                     } else {
-                        Color::DarkGray
+                        TEXT_MUTED
                     };
-                    spans.push(Span::styled(
-                        format!("[{license}]"),
-                        Style::default().fg(lic_color),
-                    ));
+                    let lic_style = if license == "(none)" {
+                        Style::default().fg(lic_color).italic()
+                    } else {
+                        Style::default().fg(lic_color)
+                    };
+                    spans.push(Span::styled(format!("[{license}]"), lic_style));
                 } else {
-                    spans.push(Span::styled(
-                        line.label.clone(),
-                        Style::default().fg(Color::White),
-                    ));
+                    spans.push(Span::styled(line.label.clone(), Style::default().fg(TEXT)));
                 }
 
-                // Show collapsed hint
+                // Collapsed hint
                 if line.has_children && !line.expanded {
-                    spans.push(Span::styled(" ...", Style::default().fg(Color::DarkGray)));
+                    spans.push(Span::styled(
+                        " ...",
+                        Style::default().fg(TEXT_MUTED).italic(),
+                    ));
                 }
             }
 
-            let line = Line::from(spans);
+            let result = Line::from(spans);
             if is_selected {
-                line.style(
+                result.style(
                     Style::default()
-                        .bg(Color::DarkGray)
+                        .bg(BG_HIGHLIGHT)
+                        .fg(TEXT_BRIGHT)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                line
+                result
             }
         })
         .collect();
@@ -330,9 +404,9 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
     let paragraph = Paragraph::new(lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_style(Style::default().fg(BORDER_ACTIVE))
             .title(" Dependency Tree ")
-            .title_style(Style::default().fg(Color::Cyan).bold()),
+            .title_style(Style::default().fg(ACCENT).bold()),
     );
     frame.render_widget(paragraph, area);
 
@@ -343,7 +417,9 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect) {
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("▲"))
-                .end_symbol(Some("▼")),
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(BORDER))
+                .thumb_style(Style::default().fg(TEXT_MUTED)),
             area,
             &mut scrollbar_state,
         );
@@ -358,40 +434,48 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
     let content = if let Some(bom_ref) = app.selected_bom_ref() {
         if let Some(comp) = app.sbom.components.get(bom_ref) {
             let type_color = dep_type_color(&comp.dep_type);
+            let license_style = if comp.licenses.is_empty() {
+                Style::default().fg(COLOR_ERROR).italic()
+            } else {
+                Style::default().fg(TEXT)
+            };
             vec![
                 Line::from(vec![
-                    Span::styled(&comp.name, Style::default().bold().fg(Color::White)),
-                    Span::raw(format!(" {}  ", comp.version)),
-                    Span::styled("Type: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(comp.dep_type.label(), Style::default().fg(type_color)),
-                    Span::raw("  "),
-                    Span::styled("License: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(&comp.name, Style::default().bold().fg(TEXT_BRIGHT)),
                     Span::styled(
-                        comp.license_str(),
-                        if comp.licenses.is_empty() {
-                            Style::default().fg(COLOR_LICENSE_NONE).italic()
-                        } else {
-                            Style::default()
-                        },
+                        format!(" {}", comp.version),
+                        Style::default().fg(TEXT_MUTED),
                     ),
-                    Span::raw("  "),
-                    Span::styled("Scope: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(&comp.scope),
-                    Span::raw("  "),
-                    Span::styled("Group: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(if comp.dep_group.is_empty() {
-                        "-"
-                    } else {
-                        &comp.dep_group
-                    }),
+                    Span::styled("  │  ", Style::default().fg(BORDER)),
+                    Span::styled("Type ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled(
+                        comp.dep_type.label(),
+                        Style::default().fg(type_color).bold(),
+                    ),
+                    Span::styled("  │  ", Style::default().fg(BORDER)),
+                    Span::styled("License ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled(comp.license_str(), license_style),
+                    Span::styled("  │  ", Style::default().fg(BORDER)),
+                    Span::styled("Scope ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled(&comp.scope, Style::default().fg(TEXT)),
+                    Span::styled("  │  ", Style::default().fg(BORDER)),
+                    Span::styled("Group ", Style::default().fg(TEXT_MUTED)),
+                    Span::styled(
+                        if comp.dep_group.is_empty() {
+                            "-"
+                        } else {
+                            &comp.dep_group
+                        },
+                        Style::default().fg(TEXT),
+                    ),
                 ]),
                 Line::from(Span::styled(
                     &comp.description,
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(TEXT_MUTED),
                 )),
                 Line::from(Span::styled(
                     format!("purl: {}", comp.purl),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(TEXT_MUTED).italic(),
                 )),
             ]
         } else {
@@ -400,15 +484,16 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         vec![Line::from(Span::styled(
             "Select a dependency to view details",
-            Style::default().fg(Color::DarkGray).italic(),
+            Style::default().fg(TEXT_MUTED).italic(),
         ))]
     };
 
     let block = Block::default()
+        .style(Style::default().bg(BG_PANEL))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
+        .border_style(Style::default().fg(BORDER_ACTIVE))
         .title(" Detail ")
-        .title_style(Style::default().fg(Color::Cyan).bold());
+        .title_style(Style::default().fg(ACCENT).bold());
     let paragraph = Paragraph::new(content).block(block);
     frame.render_widget(paragraph, area);
 }
@@ -418,30 +503,35 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
 // ---------------------------------------------------------------------------
 
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
-    let key_style = Style::default().bold().fg(Color::Black).bg(Color::DarkGray);
+    let key_style = Style::default().bold().fg(BG_SURFACE).bg(TEXT_MUTED);
+    let sep = Style::default().fg(TEXT_MUTED);
+
     let mut spans = vec![
         Span::styled(" q ", key_style),
-        Span::raw(" Quit  "),
+        Span::styled(" Quit  ", sep),
         Span::styled(" Tab ", key_style),
-        Span::raw(" Switch  "),
+        Span::styled(" Switch  ", sep),
         Span::styled(" ↑↓ ", key_style),
-        Span::raw(" Navigate  "),
+        Span::styled(" Navigate  ", sep),
         Span::styled(" PgUp/Dn ", key_style),
-        Span::raw(" Page  "),
+        Span::styled(" Page  ", sep),
     ];
     if app.active_tab == Tab::Tree {
         spans.extend([
             Span::styled(" Enter ", key_style),
-            Span::raw(" Toggle  "),
+            Span::styled(" Toggle  ", sep),
             Span::styled(" ←→ ", key_style),
-            Span::raw(" Collapse/Expand  "),
+            Span::styled(" Collapse/Expand  ", sep),
             Span::styled(" e ", key_style),
-            Span::raw(" Expand All  "),
+            Span::styled(" Expand All  ", sep),
             Span::styled(" c ", key_style),
-            Span::raw(" Collapse All  "),
+            Span::styled(" Collapse All  ", sep),
         ]);
     }
-    frame.render_widget(Paragraph::new(Line::from(spans)), area);
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(BG_SURFACE_ALT)),
+        area,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -454,6 +544,16 @@ fn dep_type_color(dt: &DepType) -> Color {
         DepType::Dev(_) => COLOR_DEV,
         DepType::Optional => COLOR_OPTIONAL,
         DepType::Transitive => COLOR_TRANSITIVE,
+    }
+}
+
+fn category_color(label: &str) -> Color {
+    if label.contains("required") {
+        COLOR_REQUIRED
+    } else if label.contains("dev") {
+        COLOR_DEV
+    } else {
+        COLOR_OPTIONAL
     }
 }
 
