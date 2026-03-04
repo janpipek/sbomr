@@ -3,6 +3,7 @@
 //! Colour palette is designed to match the Textual (Python) dark theme.
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
@@ -10,7 +11,6 @@ use ratatui::{
         Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, Tabs,
     },
-    Frame,
 };
 
 use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
@@ -77,16 +77,22 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
     let filter_bar_height = if show_filter_bar { 1 } else { 0 };
 
-    let [header_area, tabs_area, filter_area, main_area, detail_area, footer_area] =
-        Layout::vertical([
-            Constraint::Length(3),                 // summary bar
-            Constraint::Length(1),                 // tabs
-            Constraint::Length(filter_bar_height), // filter bar (0 or 1)
-            Constraint::Min(8),                    // table or tree
-            Constraint::Length(5),                 // detail panel
-            Constraint::Length(1),                 // footer keybinds
-        ])
-        .areas(frame.area());
+    let [
+        header_area,
+        tabs_area,
+        filter_area,
+        main_area,
+        detail_area,
+        footer_area,
+    ] = Layout::vertical([
+        Constraint::Length(3),                 // summary bar
+        Constraint::Length(1),                 // tabs
+        Constraint::Length(filter_bar_height), // filter bar (0 or 1)
+        Constraint::Min(8),                    // table or tree
+        Constraint::Length(5),                 // detail panel
+        Constraint::Length(1),                 // footer keybinds
+    ])
+    .areas(frame.area());
 
     draw_summary(frame, app, header_area);
     draw_tabs(frame, app, tabs_area);

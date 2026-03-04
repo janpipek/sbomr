@@ -9,7 +9,7 @@ use color_eyre::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
 
@@ -90,6 +90,11 @@ fn open_url(url: &str) -> std::io::Result<std::process::ExitStatus> {
     }
 }
 
+/// Check whether (col, row) falls inside `area`.
+fn in_rect(col: u16, row: u16, area: Rect) -> bool {
+    col >= area.x && col < area.x + area.width && row >= area.y && row < area.y + area.height
+}
+
 fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
     let col = mouse.column;
     let row = mouse.row;
@@ -98,11 +103,7 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
         MouseEventKind::Down(MouseButton::Left) => {
             // 1. Check tab clicks
             for &(area, tab) in &app.click_areas.tabs {
-                if col >= area.x
-                    && col < area.x + area.width
-                    && row >= area.y
-                    && row < area.y + area.height
-                {
+                if in_rect(col, row, area) {
                     app.active_tab = tab;
                     return;
                 }
@@ -110,11 +111,7 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
 
             // 2. Check panel title bar clicks (switch to the other tab)
             for &(area, tab) in &app.click_areas.panel_titles {
-                if col >= area.x
-                    && col < area.x + area.width
-                    && row >= area.y
-                    && row < area.y + area.height
-                {
+                if in_rect(col, row, area) {
                     app.active_tab = tab;
                     return;
                 }
@@ -123,11 +120,7 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
             // 3. Check column header clicks (only on Table tab)
             if app.active_tab == app::Tab::Table {
                 for &(area, sort_col) in &app.click_areas.column_headers {
-                    if col >= area.x
-                        && col < area.x + area.width
-                        && row >= area.y
-                        && row < area.y + area.height
-                    {
+                    if in_rect(col, row, area) {
                         app.set_sort_column(sort_col);
                         return;
                     }
@@ -135,49 +128,32 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
             }
 
             // 4. Check table body clicks
-            if app.active_tab == app::Tab::Table {
-                if let Some(body) = app.click_areas.table_body {
-                    if col >= body.x
-                        && col < body.x + body.width
-                        && row >= body.y
-                        && row < body.y + body.height
-                    {
-                        let offset = app.table_state.offset();
-                        let clicked_row = (row - body.y) as usize + offset;
-                        app.select_table_row(clicked_row);
-                        return;
-                    }
-                }
+            if app.active_tab == app::Tab::Table
+                && let Some(body) = app.click_areas.table_body
+                && in_rect(col, row, body)
+            {
+                let offset = app.table_state.offset();
+                let clicked_row = (row - body.y) as usize + offset;
+                app.select_table_row(clicked_row);
             }
 
             // 5. Check tree body clicks
-            if app.active_tab == app::Tab::Tree {
-                if let Some(body) = app.click_areas.tree_body {
-                    if col >= body.x
-                        && col < body.x + body.width
-                        && row >= body.y
-                        && row < body.y + body.height
-                    {
-                        let clicked_row = (row - body.y) as usize + app.tree_scroll_offset;
-                        if clicked_row < app.tree_len() {
-                            if clicked_row == app.tree_selected {
-                                // Click on already-selected node: toggle expand/collapse
-                                app.toggle_selected();
-                            } else {
-                                app.select_tree_row(clicked_row);
-                            }
-                        }
-                        return;
+            if app.active_tab == app::Tab::Tree
+                && let Some(body) = app.click_areas.tree_body
+                && in_rect(col, row, body)
+            {
+                let clicked_row = (row - body.y) as usize + app.tree_scroll_offset;
+                if clicked_row < app.tree_len() {
+                    if clicked_row == app.tree_selected {
+                        app.toggle_selected();
+                    } else {
+                        app.select_tree_row(clicked_row);
                     }
                 }
             }
         }
-        MouseEventKind::ScrollUp => {
-            app.move_up();
-        }
-        MouseEventKind::ScrollDown => {
-            app.move_down();
-        }
+        MouseEventKind::ScrollUp => app.move_up(),
+        MouseEventKind::ScrollDown => app.move_down(),
         _ => {}
     }
 }
@@ -275,12 +251,11 @@ fn run_loop(
                     }
                     // Open package registry URL in browser
                     KeyCode::Char('o') => {
-                        if let Some(bom_ref) = app.selected_bom_ref() {
-                            if let Some(comp) = app.sbom.components.get(bom_ref) {
-                                if let Some(url) = comp.registry_url() {
-                                    let _ = open_url(&url);
-                                }
-                            }
+                        if let Some(bom_ref) = app.selected_bom_ref()
+                            && let Some(comp) = app.sbom.components.get(bom_ref)
+                            && let Some(url) = comp.registry_url()
+                        {
+                            let _ = open_url(&url);
                         }
                     }
                     _ => {}
