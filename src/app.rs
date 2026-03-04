@@ -636,21 +636,21 @@ fn build_stateful_tree(roots: &[TreeNode]) -> Vec<StatefulNode> {
             label: root.label.clone(),
             bom_ref: root.bom_ref.clone(),
             is_category: true,
-            expanded: true,
-            children: build_stateful_children(&root.children),
+            expanded: true, // categories start expanded
+            children: build_stateful_children(&root.children, 1),
         })
         .collect()
 }
 
-fn build_stateful_children(children: &[TreeNode]) -> Vec<StatefulNode> {
+fn build_stateful_children(children: &[TreeNode], depth: usize) -> Vec<StatefulNode> {
     children
         .iter()
         .map(|child| StatefulNode {
             label: child.label.clone(),
             bom_ref: child.bom_ref.clone(),
             is_category: false,
-            expanded: true,
-            children: build_stateful_children(&child.children),
+            expanded: depth < 1, // only first level under categories is visible
+            children: build_stateful_children(&child.children, depth + 1),
         })
         .collect()
 }

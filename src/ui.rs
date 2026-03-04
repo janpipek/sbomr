@@ -189,13 +189,24 @@ fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         .divider(Span::styled("│", Style::default().fg(c.border)));
     frame.render_widget(tabs, area);
 
+    // Tabs widget renders: pad_left(1) + title + pad_right(1) + divider(1) per tab.
+    // The last tab has no divider. Account for padding to align click areas correctly.
     let tab_variants = [Tab::Table, Tab::Tree, Tab::Metadata];
+    let area_end = area.x + area.width;
+    let pad = 1u16; // default Tabs padding on each side
+    let divider_w = 1u16;
     let mut x = area.x;
     for (i, title) in titles.iter().enumerate() {
-        let w = title.len() as u16;
-        let tab_area = Rect::new(x, area.y, w, 1);
-        app.click_areas.tabs.push((tab_area, tab_variants[i]));
-        x += w + 1;
+        let last = i == titles.len() - 1;
+        let title_w = title.len() as u16;
+        let full_w = pad + title_w + pad + if last { 0 } else { divider_w };
+        // The clickable region covers the padding + title + padding (not the divider)
+        let click_w = (pad + title_w + pad).min(area_end.saturating_sub(x));
+        if x < area_end {
+            let tab_area = Rect::new(x, area.y, click_w, 1);
+            app.click_areas.tabs.push((tab_area, tab_variants[i]));
+        }
+        x += full_w;
     }
 }
 
