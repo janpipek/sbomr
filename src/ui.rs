@@ -1219,7 +1219,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         Span::styled(" o ", key_style),
         Span::styled(" Open URL  ", sep),
         Span::styled(" t ", key_style),
-        Span::styled(format!(" {} ", app.theme.label()), sep),
+        Span::styled(" Dark/Light  ", sep),
     ];
     if app.active_tab == Tab::Table {
         spans.extend([
