@@ -231,7 +231,14 @@ fn run_loop(
                     KeyCode::Down | KeyCode::Char('j') => app.move_down(),
                     KeyCode::PageUp => app.page_up(10),
                     KeyCode::PageDown => app.page_down(10),
-                    KeyCode::Home | KeyCode::Char('g') => app.home(),
+                    KeyCode::Home => app.home(),
+                    KeyCode::Char('g') => {
+                        if app.active_tab == app::Tab::Tree {
+                            app.cycle_tree_grouping();
+                        } else {
+                            app.home();
+                        }
+                    }
                     KeyCode::End | KeyCode::Char('G') => app.end(),
                     // Tree / JSON expand/collapse
                     KeyCode::Enter | KeyCode::Char(' ') => match app.active_tab {

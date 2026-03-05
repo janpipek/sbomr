@@ -66,7 +66,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
 | `PgUp` / `PgDn` | Page up / down |
-| `g` / `Home` | Jump to top |
+| `g` / `Home` | Jump to top (`g` = group on Tree tab) |
 | `G` / `End` | Jump to bottom |
 | `o` | Open selected package's registry page in browser |
 | `t` | Toggle light / dark theme |
@@ -90,6 +90,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `h` / `←` | Collapse node (or jump to parent) |
 | `e` | Expand all |
 | `c` | Collapse all |
+| `g` | Cycle tree grouping (dependency type / source file) |
 
 ### JSON
 

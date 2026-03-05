@@ -21,10 +21,7 @@ impl Theme {
     }
 
     pub fn label(self) -> &'static str {
-        match self {
-            Theme::Dark => "Dark",
-            Theme::Light => "Light",
-        }
+        "Dark/Light"
     }
 
     /// Return the colour palette for this theme.

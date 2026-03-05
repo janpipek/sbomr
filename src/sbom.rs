@@ -410,6 +410,10 @@ pub struct SBOMData {
     pub tree_roots: Vec<TreeNode>,               // top-level tree categories
     pub metadata: SBOMMetadata,
     pub json_root: JsonNode, // collapsible JSON tree for the JSON viewer
+    // Retained for rebuilding trees with different groupings:
+    pub root_direct: HashSet<String>,
+    pub dev_refs: HashSet<String>,
+    pub all_child_refs: HashSet<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -897,6 +901,9 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         tree_roots,
         metadata: sbom_metadata,
         json_root,
+        root_direct,
+        dev_refs,
+        all_child_refs,
     })
 }
 
@@ -904,7 +911,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
 // Tree building
 // ---------------------------------------------------------------------------
 
-fn build_tree(
+pub fn build_tree(
     _root_ref: &str,
     root_direct: &HashSet<String>,
     dev_refs: &HashSet<String>,
@@ -992,6 +999,45 @@ fn build_tree(
         }
         roots.push(TreeNode {
             label: "optional extras".into(),
+            bom_ref: String::new(),
+            children,
+            depth: 0,
+        });
+    }
+
+    roots
+}
+
+pub fn build_tree_by_source(
+    components: &BTreeMap<String, Component>,
+    dep_graph: &HashMap<String, Vec<String>>,
+) -> Vec<TreeNode> {
+    // Group components by their source_file property (e.g. "Cargo.lock", "uv.lock")
+    let mut by_source: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (bom_ref, comp) in components {
+        let src = if comp.source_file.is_empty() {
+            "unknown".to_string()
+        } else {
+            comp.source_file.clone()
+        };
+        by_source.entry(src).or_default().push(bom_ref.clone());
+    }
+
+    let mut roots = Vec::new();
+    for (source, mut refs) in by_source {
+        refs.sort();
+        let mut children = Vec::new();
+        for r in &refs {
+            children.push(build_subtree(
+                r,
+                components,
+                dep_graph,
+                &mut HashSet::new(),
+                1,
+            ));
+        }
+        roots.push(TreeNode {
+            label: source,
             bom_ref: String::new(),
             children,
             depth: 0,

@@ -1,7 +1,8 @@
 //! Application state and input handling.
 
 use crate::sbom::{
-    Component, FlatJsonLine, JsonNode, JsonNodeKind, SBOMData, TreeNode, flatten_json,
+    Component, FlatJsonLine, JsonNode, JsonNodeKind, SBOMData, TreeNode, build_tree,
+    build_tree_by_source, flatten_json,
 };
 use crate::theme::Theme;
 use ratatui::layout::Rect;
@@ -31,6 +32,32 @@ impl Tab {
             Tab::Tree => Tab::Table,
             Tab::Metadata => Tab::Tree,
             Tab::Json => Tab::Metadata,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tree grouping
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeGrouping {
+    DepType,
+    Source,
+}
+
+impl TreeGrouping {
+    pub fn next(self) -> Self {
+        match self {
+            TreeGrouping::DepType => TreeGrouping::Source,
+            TreeGrouping::Source => TreeGrouping::DepType,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TreeGrouping::DepType => "by dependency type",
+            TreeGrouping::Source => "by source file",
         }
     }
 }
@@ -224,6 +251,7 @@ pub struct App {
     pub filter_input_buf: String,
 
     // Tree
+    pub tree_grouping: TreeGrouping,
     pub tree_selected: usize,
     pub tree_scroll_offset: usize,
     pub tree_roots: Vec<StatefulNode>,
@@ -264,6 +292,7 @@ impl App {
             filter_column: FilterColumn::Name,
             filter_text: String::new(),
             filter_input_buf: String::new(),
+            tree_grouping: TreeGrouping::DepType,
             tree_selected: 0,
             tree_scroll_offset: 0,
             tree_roots,
@@ -526,6 +555,27 @@ impl App {
         if self.tree_selected >= self.flat_tree.len() {
             self.tree_selected = self.flat_tree.len().saturating_sub(1);
         }
+    }
+
+    pub fn cycle_tree_grouping(&mut self) {
+        self.tree_grouping = self.tree_grouping.next();
+        let new_roots = match self.tree_grouping {
+            TreeGrouping::DepType => build_tree(
+                &self.sbom.root_ref,
+                &self.sbom.root_direct,
+                &self.sbom.dev_refs,
+                &self.sbom.all_child_refs,
+                &self.sbom.components,
+                &self.sbom.dep_graph,
+            ),
+            TreeGrouping::Source => {
+                build_tree_by_source(&self.sbom.components, &self.sbom.dep_graph)
+            }
+        };
+        self.tree_roots = build_stateful_tree(&new_roots);
+        self.tree_selected = 0;
+        self.tree_scroll_offset = 0;
+        self.rebuild_flat_tree();
     }
 
     // -- Navigation ---------------------------------------------------------

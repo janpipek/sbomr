@@ -586,7 +586,7 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(c.border_active))
-            .title(" Dependency Tree ")
+            .title(format!(" Dependency Tree ({}) ", app.tree_grouping.label()))
             .title_style(Style::default().fg(c.accent).bold()),
     );
     frame.render_widget(paragraph, area);
@@ -1249,6 +1249,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
             Span::styled(" Expand All  ", sep),
             Span::styled(" c ", key_style),
             Span::styled(" Collapse All  ", sep),
+            Span::styled(" g ", key_style),
+            Span::styled(" Group  ", sep),
         ]);
     }
     if app.active_tab == Tab::Json {
