@@ -36,7 +36,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let show_filter_bar = app.active_tab == Tab::Table
         && (app.has_active_filter() || app.input_mode == InputMode::FilterInput);
     let filter_bar_height = if show_filter_bar { 1 } else { 0 };
-    let detail_height = if app.active_tab == Tab::Json { 0 } else { 6 };
+    let detail_height = match app.active_tab {
+        Tab::Json | Tab::Metadata => 0,
+        _ => 6,
+    };
 
     let [
         header_area,
@@ -643,9 +646,54 @@ fn draw_metadata(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) 
         meta_row("Timestamp", &m.timestamp, c),
         meta_row("Tool", &tool_str, c),
         meta_row("Lifecycle Phase", &m.lifecycle_phase, c),
-        meta_row("Component Sources", &m.component_src_files, c),
-        meta_row("Component Types", &m.component_types, c),
     ];
+
+    // Component types: split on literal `\n`, one per line, sorted
+    {
+        let mut types: Vec<&str> = m
+            .component_types
+            .split("\\n")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        types.sort_unstable();
+        if types.is_empty() {
+            lines.push(meta_row("Component Types", "-", c));
+        } else {
+            lines.push(meta_row("Component Types", types[0], c));
+            let indent = format!("{:<25}", "");
+            for t in &types[1..] {
+                lines.push(Line::from(vec![
+                    Span::styled(indent.clone(), Style::default()),
+                    Span::styled((*t).to_string(), Style::default().fg(c.text)),
+                ]));
+            }
+        }
+    }
+
+    // Component sources: one per line, sorted
+    // cdxgen encodes literal `\n` (backslash + n) as separator in the JSON value.
+    {
+        let mut srcs: Vec<&str> = m
+            .component_src_files
+            .split("\\n")
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        srcs.sort_unstable();
+        if srcs.is_empty() {
+            lines.push(meta_row("Component Sources", "-", c));
+        } else {
+            lines.push(meta_row("Component Sources", srcs[0], c));
+            let indent = format!("{:<25}", "");
+            for src in &srcs[1..] {
+                lines.push(Line::from(vec![
+                    Span::styled(indent.clone(), Style::default()),
+                    Span::styled((*src).to_string(), Style::default().fg(c.text)),
+                ]));
+            }
+        }
+    }
 
     if !m.annotation.is_empty() {
         lines.push(Line::from(""));
@@ -782,14 +830,39 @@ fn draw_metadata(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) 
     let title_bar = Rect::new(area.x, area.y, area.width, 1);
     app.click_areas.panel_titles.push((title_bar, Tab::Table));
 
-    let paragraph = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(c.border_active))
-            .title(" Metadata ")
-            .title_style(Style::default().fg(c.accent).bold()),
-    );
+    // Store line count and clamp scroll offset.
+    let content_height = area.height.saturating_sub(2) as usize; // minus top/bottom border
+    app.metadata_line_count = lines.len();
+    let max_scroll = lines.len().saturating_sub(content_height);
+    if app.metadata_scroll_offset > max_scroll {
+        app.metadata_scroll_offset = max_scroll;
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .scroll((app.metadata_scroll_offset as u16, 0))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(c.border_active))
+                .title(" Metadata ")
+                .title_style(Style::default().fg(c.accent).bold()),
+        );
     frame.render_widget(paragraph, area);
+
+    // Scrollbar
+    if app.metadata_line_count > content_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(max_scroll).position(app.metadata_scroll_offset);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
+            area,
+            &mut scrollbar_state,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

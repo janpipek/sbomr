@@ -229,6 +229,10 @@ pub struct App {
     pub tree_roots: Vec<StatefulNode>,
     pub flat_tree: Vec<FlatTreeLine>,
 
+    // Metadata scroll
+    pub metadata_scroll_offset: usize,
+    pub metadata_line_count: usize,
+
     // JSON viewer (collapsible tree)
     pub json_root: JsonNode,
     pub flat_json: Vec<FlatJsonLine>,
@@ -264,6 +268,8 @@ impl App {
             tree_scroll_offset: 0,
             tree_roots,
             flat_tree,
+            metadata_scroll_offset: 0,
+            metadata_line_count: 0,
             json_root,
             flat_json,
             json_selected: 0,
@@ -546,7 +552,11 @@ impl App {
                     self.json_selected -= 1;
                 }
             }
-            Tab::Metadata => {}
+            Tab::Metadata => {
+                if self.metadata_scroll_offset > 0 {
+                    self.metadata_scroll_offset -= 1;
+                }
+            }
         }
     }
 
@@ -568,7 +578,9 @@ impl App {
                     self.json_selected += 1;
                 }
             }
-            Tab::Metadata => {}
+            Tab::Metadata => {
+                self.metadata_scroll_offset += 1;
+            }
         }
     }
 
@@ -584,7 +596,9 @@ impl App {
             Tab::Json => {
                 self.json_selected = self.json_selected.saturating_sub(page_size);
             }
-            Tab::Metadata => {}
+            Tab::Metadata => {
+                self.metadata_scroll_offset = self.metadata_scroll_offset.saturating_sub(page_size);
+            }
         }
     }
 
@@ -603,7 +617,10 @@ impl App {
                 let max = self.json_len().saturating_sub(1);
                 self.json_selected = (self.json_selected + page_size).min(max);
             }
-            Tab::Metadata => {}
+            Tab::Metadata => {
+                self.metadata_scroll_offset = (self.metadata_scroll_offset + page_size)
+                    .min(self.metadata_line_count.saturating_sub(1));
+            }
         }
     }
 
@@ -612,7 +629,7 @@ impl App {
             Tab::Table => self.table_state.select(Some(0)),
             Tab::Tree => self.tree_selected = 0,
             Tab::Json => self.json_selected = 0,
-            Tab::Metadata => {}
+            Tab::Metadata => self.metadata_scroll_offset = 0,
         }
     }
 
@@ -623,7 +640,9 @@ impl App {
                 .select(Some(self.table_len().saturating_sub(1))),
             Tab::Tree => self.tree_selected = self.tree_len().saturating_sub(1),
             Tab::Json => self.json_selected = self.json_len().saturating_sub(1),
-            Tab::Metadata => {}
+            Tab::Metadata => {
+                self.metadata_scroll_offset = self.metadata_line_count.saturating_sub(1);
+            }
         }
     }
 
