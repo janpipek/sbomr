@@ -330,6 +330,8 @@ pub struct Component {
     pub bom_ref: String,
     pub licenses: Vec<String>,
     pub scope: String,
+    /// CycloneDX component type (e.g. "library", "application", "framework").
+    pub comp_type: String,
     pub dep_group: String,
     pub is_direct: bool,
     pub dep_type: DepType,
@@ -1079,6 +1081,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         let purl = rc.purl.clone().unwrap_or_default();
         let licenses = extract_licenses(&rc.licenses);
         let scope = rc.scope.clone().unwrap_or_else(|| "unknown".into());
+        let comp_type = rc.comp_type.clone().unwrap_or_default();
         let dep_group = get_property(&rc.properties, "cdx:pyproject:group").unwrap_or_default();
         let is_direct = root_direct.contains(&bom_ref);
 
@@ -1148,6 +1151,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
                 bom_ref: bom_ref.clone(),
                 licenses,
                 scope,
+                comp_type,
                 dep_group,
                 is_direct,
                 dep_type: DepType::Transitive,
@@ -1204,9 +1208,22 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         }
     }
 
-    // Infer scope for components where the SBOM didn't set the field.
-    // We display inferred values in parentheses to distinguish them from
-    // explicit SBOM data.
+    // Align scope with dep_type so the two columns are consistent:
+    // - Required (direct) deps always have scope "required"
+    // - Transitive deps get scope inferred from their parent chain (reset to
+    //   "unknown" so infer_unknown_scopes propagates parent scope in parens)
+    if graph_available {
+        for comp in components.values_mut() {
+            match &comp.dep_type {
+                DepType::Required => comp.scope = "required".into(),
+                DepType::Transitive => comp.scope = "unknown".into(),
+                _ => {}
+            }
+        }
+    }
+
+    // Infer scope for components where the SBOM didn't set the field, and for
+    // transitive deps (reset above). Inferred values are displayed in parens.
     infer_unknown_scopes(&mut components, &root_direct, &dep_graph, &root_ref);
 
     // Sorted component refs for the table display
@@ -1283,11 +1300,13 @@ fn resolve_scope(
     }
 
     let result = if let Some(comp) = components.get(bom_ref) {
-        if comp.scope != "unknown" {
+        if root_direct.contains(bom_ref) {
+            // Direct dependency of root — always required regardless of
+            // the explicit scope field.
+            "required".into()
+        } else if comp.scope != "unknown" {
             // Explicit scope — authoritative
             comp.scope.clone()
-        } else if root_direct.contains(bom_ref) {
-            "required".into()
         } else if let Some(parents) = parent_map.get(bom_ref) {
             // Recursive: check all parents
             let mut any_required = false;

@@ -3,7 +3,6 @@
 //! Colours are provided by the active [`Theme`] stored in [`App`].
 
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
@@ -11,6 +10,7 @@ use ratatui::{
         Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, Tabs,
     },
+    Frame,
 };
 
 use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
@@ -41,22 +41,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         _ => 6,
     };
 
-    let [
-        header_area,
-        tabs_area,
-        filter_area,
-        main_area,
-        detail_area,
-        footer_area,
-    ] = Layout::vertical([
-        Constraint::Length(3),                 // summary bar
-        Constraint::Length(1),                 // tabs
-        Constraint::Length(filter_bar_height), // filter bar (0 or 1)
-        Constraint::Min(8),                    // table or tree
-        Constraint::Length(detail_height),     // detail panel (0 on JSON tab)
-        Constraint::Length(1),                 // footer keybinds
-    ])
-    .areas(frame.area());
+    let [header_area, tabs_area, filter_area, main_area, detail_area, footer_area] =
+        Layout::vertical([
+            Constraint::Length(3),                 // summary bar
+            Constraint::Length(1),                 // tabs
+            Constraint::Length(filter_bar_height), // filter bar (0 or 1)
+            Constraint::Min(8),                    // table or tree
+            Constraint::Length(detail_height),     // detail panel (0 on JSON tab)
+            Constraint::Length(1),                 // footer keybinds
+        ])
+        .areas(frame.area());
 
     draw_summary(frame, app, header_area, &c);
     draw_tabs(frame, app, tabs_area, &c);
@@ -248,9 +242,10 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         sort_header_cell("Name", SortColumn::Name, app),
         sort_header_cell("Version", SortColumn::Version, app),
         sort_header_cell("Registry", SortColumn::Registry, app),
+        sort_header_cell("Type", SortColumn::Type, app),
         sort_header_cell("License", SortColumn::License, app),
         sort_header_cell("Scope", SortColumn::Scope, app),
-        Cell::from("Type"),
+        Cell::from("Dep Type"),
         Cell::from("Description"),
     ])
     .style(Style::default().bold().fg(c.accent).bg(c.bg_surface_alt))
@@ -304,6 +299,12 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
                     comp.registry.clone()
                 })
                 .style(Style::default().fg(c.text_muted)),
+                Cell::from(if comp.comp_type.is_empty() {
+                    "-".to_string()
+                } else {
+                    comp.comp_type.clone()
+                })
+                .style(Style::default().fg(c.text_muted)),
                 Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.scope.clone()).style(Style::default().fg(c.text_muted)),
                 Cell::from(comp.dep_type.label())
@@ -319,9 +320,10 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         Constraint::Length(22), // Name
         Constraint::Length(10), // Version
         Constraint::Length(10), // Registry
+        Constraint::Length(14), // Type
         Constraint::Length(28), // License
         Constraint::Length(14), // Scope
-        Constraint::Length(14), // Type
+        Constraint::Length(14), // Dep Type
         Constraint::Min(20),    // Description
     ];
 
@@ -330,12 +332,13 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     // The highlight_symbol "▶ " takes 2 chars, so columns start at area.x + 1 + 2.
     // The header row is at area.y + 1 (below the top border).
     {
-        let sortable_columns: [(usize, SortColumn); 5] = [
+        let sortable_columns: [(usize, SortColumn); 6] = [
             (0, SortColumn::Name),
             (1, SortColumn::Version),
             (2, SortColumn::Registry),
-            (3, SortColumn::License),
-            (4, SortColumn::Scope),
+            (3, SortColumn::Type),
+            (4, SortColumn::License),
+            (5, SortColumn::Scope),
         ];
         let content_width = area.width.saturating_sub(2); // minus left+right borders
         let resolved = resolve_widths(&widths, content_width.saturating_sub(2)); // minus highlight symbol
@@ -1236,10 +1239,20 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
             let type_color = dep_type_color(&comp.dep_type, c);
             line1.extend([
                 Span::styled("  │  ", Style::default().fg(c.border)),
+                Span::styled("Type ", Style::default().fg(c.text_muted)),
+                Span::styled(
+                    if comp.comp_type.is_empty() {
+                        "-"
+                    } else {
+                        &comp.comp_type
+                    },
+                    Style::default().fg(c.text).bold(),
+                ),
+                Span::styled("  │  ", Style::default().fg(c.border)),
                 Span::styled("Scope ", Style::default().fg(c.text_muted)),
                 Span::styled(&comp.scope, Style::default().fg(c.text).bold()),
                 Span::styled("  │  ", Style::default().fg(c.border)),
-                Span::styled("Type ", Style::default().fg(c.text_muted)),
+                Span::styled("Dep Type ", Style::default().fg(c.text_muted)),
                 Span::styled(
                     comp.dep_type.label(),
                     Style::default().fg(type_color).bold(),

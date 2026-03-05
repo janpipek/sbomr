@@ -76,6 +76,7 @@ pub enum SortColumn {
     License,
     Scope,
     Registry,
+    Type,
 }
 
 #[allow(dead_code)]
@@ -84,6 +85,7 @@ impl SortColumn {
         SortColumn::Name,
         SortColumn::Version,
         SortColumn::Registry,
+        SortColumn::Type,
         SortColumn::License,
         SortColumn::Scope,
     ];
@@ -95,6 +97,7 @@ impl SortColumn {
             SortColumn::License => "License",
             SortColumn::Scope => "Scope",
             SortColumn::Registry => "Registry",
+            SortColumn::Type => "Type",
         }
     }
 
@@ -133,6 +136,7 @@ pub enum FilterColumn {
     Name,
     License,
     Scope,
+    Type,
 }
 
 impl FilterColumn {
@@ -140,6 +144,7 @@ impl FilterColumn {
         FilterColumn::Name,
         FilterColumn::License,
         FilterColumn::Scope,
+        FilterColumn::Type,
     ];
 
     pub fn label(self) -> &'static str {
@@ -147,6 +152,7 @@ impl FilterColumn {
             FilterColumn::Name => "Name",
             FilterColumn::License => "License",
             FilterColumn::Scope => "Scope",
+            FilterColumn::Type => "Type",
         }
     }
 
@@ -447,6 +453,7 @@ impl App {
                         comp.license_str().to_lowercase().contains(&filter_lower)
                     }
                     FilterColumn::Scope => comp.scope.to_lowercase().contains(&filter_lower),
+                    FilterColumn::Type => comp.comp_type.to_lowercase().contains(&filter_lower),
                 }
             })
             .cloned()
@@ -884,6 +891,11 @@ fn compare_by_column(a: &Component, b: &Component, col: SortColumn) -> std::cmp:
             .registry
             .to_lowercase()
             .cmp(&b.registry.to_lowercase())
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        SortColumn::Type => a
+            .comp_type
+            .to_lowercase()
+            .cmp(&b.comp_type.to_lowercase())
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
     }
 }

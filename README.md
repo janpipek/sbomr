@@ -26,7 +26,7 @@ sbomr --help
 
 ## Features
 
-- **Dependency List** -- sortable, filterable columns: Name, Version, License, Type, Registry, Scope, Group, Description
+- **Dependency List** -- sortable, filterable columns: Name, Version, Registry, Type, License, Scope, Dep Type, Description
 - **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; starts partially collapsed
 - **Metadata tab** -- SBOM provenance (spec version, serial number, timestamp, tool, lifecycle phase) and component statistics (outdated, no-license, copyleft, vulnerable counts)
 - **JSON tab** -- collapsible tree viewer for the raw SBOM JSON with syntax highlighting; starts expanded to the first level
@@ -36,8 +36,8 @@ sbomr --help
 - **Light and dark themes** -- auto-detects terminal background at startup; press `t` to toggle
 - **Colour-coded dependency types** -- green (required), amber (dev), purple (optional), muted (transitive)
 - **Missing license highlighting** -- red italic for components with no declared license
-- **Sorting** -- cycle through Name, Version, License, Type, or Registry columns; toggle ascending/descending
-- **Filtering** -- case-insensitive text search against Name, License, or Type with a dedicated input mode
+- **Sorting** -- cycle through Name, Version, Registry, Type, License, or Scope columns; toggle ascending/descending
+- **Filtering** -- case-insensitive text search against Name, License, Scope, or Type with a dedicated input mode
 - **Mouse support** -- clickable tabs, column headers (click to sort, click again to reverse), table rows, tree nodes (click to select, click again to toggle), panel title bars, and scroll wheel navigation
 - **Registry URLs** -- constructs browsable links from purl for 15 package managers and opens them in the default browser
 - **Zebra-striped table** with scrollbar
@@ -75,10 +75,10 @@ npx @cyclonedx/cdxgen -o bom.json
 
 | Key | Action |
 |---|---|
-| `s` | Cycle sort column (Type -> Name -> Version -> License -> Registry) |
+| `s` | Cycle sort column (Name -> Version -> Registry -> Type -> License -> Scope) |
 | `S` | Reverse sort direction |
 | `/` | Enter filter input mode |
-| `f` | Cycle filter column (Name -> License -> Type) |
+| `f` | Cycle filter column (Name -> License -> Scope -> Type) |
 | `x` | Clear active filter |
 
 ### Dependency Tree
