@@ -24,6 +24,15 @@ impl Tab {
             Tab::Json => Tab::Table,
         }
     }
+
+    pub fn prev(self) -> Self {
+        match self {
+            Tab::Table => Tab::Json,
+            Tab::Tree => Tab::Table,
+            Tab::Metadata => Tab::Tree,
+            Tab::Json => Tab::Metadata,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -62,7 +62,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | Key | Action |
 |---|---|
 | `q` / `Esc` | Quit |
-| `Tab` | Switch between tabs |
+| `Tab` / `Shift+Tab` | Next / previous tab |
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
 | `PgUp` / `PgDn` | Page up / down |

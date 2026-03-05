@@ -221,8 +221,11 @@ fn run_loop(
                     KeyCode::Char('q') | KeyCode::Esc => {
                         app.should_quit = true;
                     }
-                    KeyCode::Tab | KeyCode::BackTab => {
+                    KeyCode::Tab => {
                         app.active_tab = app.active_tab.next();
+                    }
+                    KeyCode::BackTab => {
+                        app.active_tab = app.active_tab.prev();
                     }
                     KeyCode::Up | KeyCode::Char('k') => app.move_up(),
                     KeyCode::Down | KeyCode::Char('j') => app.move_down(),
