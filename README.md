@@ -102,6 +102,17 @@ npx @cyclonedx/cdxgen -o bom.json
 | `e` | Expand all |
 | `c` | Collapse all |
 
+### Mouse
+
+| Action | Effect |
+|---|---|
+| Click tab | Switch tab |
+| Click column header | Sort by that column |
+| Click row | Select row |
+| Scroll wheel | Scroll table / tree / metadata |
+| `Shift+click/drag` | Native terminal text selection (bypasses app mouse capture) |
+| `Cmd+click` / `Ctrl+click` | Open URL in browser (terminal-native, works on detail panel links) |
+
 ### Filter input mode
 
 | Key | Action |

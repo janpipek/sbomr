@@ -201,22 +201,13 @@ pub enum DepType {
 }
 
 impl DepType {
+    /// Human-readable label (inferred by the viewer, not from the SBOM).
     pub fn label(&self) -> String {
         match self {
             DepType::Required => "required".into(),
-            DepType::Dev(group) => format!("dev ({group})"),
+            DepType::Dev(group) => format!("dev: {group}"),
             DepType::Optional => "optional".into(),
             DepType::Transitive => "transitive".into(),
-        }
-    }
-
-    /// Sort order: required < dev < optional < transitive.
-    pub fn sort_key(&self) -> u8 {
-        match self {
-            DepType::Required => 0,
-            DepType::Dev(_) => 1,
-            DepType::Optional => 2,
-            DepType::Transitive => 3,
         }
     }
 }
@@ -1049,7 +1040,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         }
     }
 
-    let root_direct: HashSet<String> = dep_graph
+    let mut root_direct: HashSet<String> = dep_graph
         .get(&root_ref)
         .cloned()
         .unwrap_or_default()
@@ -1087,7 +1078,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         let description = rc.description.clone().unwrap_or_default();
         let purl = rc.purl.clone().unwrap_or_default();
         let licenses = extract_licenses(&rc.licenses);
-        let scope = rc.scope.clone().unwrap_or_else(|| "required".into());
+        let scope = rc.scope.clone().unwrap_or_else(|| "unknown".into());
         let dep_group = get_property(&rc.properties, "cdx:pyproject:group").unwrap_or_default();
         let is_direct = root_direct.contains(&bom_ref);
 
@@ -1173,13 +1164,24 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
 
     // Second pass: classify dep_type using all_child_refs to distinguish
     // optional extras from true transitive deps.
+    //
+    // When the dependency graph is empty (root has no dependsOn edges), we
+    // fall back to `scope` alone: required → Required, optional → Optional.
+    let graph_available = !root_direct.is_empty();
     for (bom_ref, comp) in components.iter_mut() {
         comp.dep_type = if !comp.dep_group.is_empty() {
             DepType::Dev(comp.dep_group.clone())
-        } else if comp.scope == "optional" {
-            DepType::Optional
+        } else if !graph_available {
+            // No dep graph — classify purely by scope
+            if comp.scope == "optional" {
+                DepType::Optional
+            } else {
+                DepType::Required
+            }
         } else if comp.is_direct {
             DepType::Required
+        } else if comp.scope == "optional" && !all_child_refs.contains(bom_ref) {
+            DepType::Optional
         } else if !all_child_refs.contains(bom_ref) {
             // Not a direct dep, not dev, not scoped optional, and not a
             // transitive child of any other component — this is an optional
@@ -1190,15 +1192,29 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         };
     }
 
+    // When using scope fallback, also mark required-scope components as direct
+    // and add them to root_direct so that build_tree() places them under the
+    // "required" category instead of letting them fall through to "optional extras".
+    if !graph_available {
+        for comp in components.values_mut() {
+            if comp.scope != "optional" {
+                comp.is_direct = true;
+                root_direct.insert(comp.bom_ref.clone());
+            }
+        }
+    }
+
+    // Infer scope for components where the SBOM didn't set the field.
+    // We display inferred values in parentheses to distinguish them from
+    // explicit SBOM data.
+    infer_unknown_scopes(&mut components, &root_direct, &dep_graph, &root_ref);
+
     // Sorted component refs for the table display
     let mut sorted_components: Vec<String> = components.keys().cloned().collect();
     sorted_components.sort_by(|a, b| {
         let ca = &components[a];
         let cb = &components[b];
-        ca.dep_type
-            .sort_key()
-            .cmp(&cb.dep_type.sort_key())
-            .then_with(|| ca.name.to_lowercase().cmp(&cb.name.to_lowercase()))
+        ca.name.to_lowercase().cmp(&cb.name.to_lowercase())
     });
 
     // Build reverse dependency map (who depends on whom)
@@ -1244,6 +1260,137 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
 }
 
 // ---------------------------------------------------------------------------
+// Scope inference for components without an explicit scope field
+// ---------------------------------------------------------------------------
+
+/// Resolve the effective scope for `bom_ref`, returning `"required"`,
+/// `"optional"`, or `"unknown"`.
+fn resolve_scope(
+    bom_ref: &str,
+    components: &BTreeMap<String, Component>,
+    parent_map: &HashMap<String, Vec<String>>,
+    root_direct: &HashSet<String>,
+    cache: &mut HashMap<String, String>,
+    visiting: &mut HashSet<String>,
+) -> String {
+    if let Some(cached) = cache.get(bom_ref) {
+        return cached.clone();
+    }
+
+    // Guard against cycles
+    if !visiting.insert(bom_ref.to_string()) {
+        return "unknown".into();
+    }
+
+    let result = if let Some(comp) = components.get(bom_ref) {
+        if comp.scope != "unknown" {
+            // Explicit scope — authoritative
+            comp.scope.clone()
+        } else if root_direct.contains(bom_ref) {
+            "required".into()
+        } else if let Some(parents) = parent_map.get(bom_ref) {
+            // Recursive: check all parents
+            let mut any_required = false;
+            let mut any_optional = false;
+            let mut all_resolved = true;
+            for parent_ref in parents {
+                let parent_scope = resolve_scope(
+                    parent_ref,
+                    components,
+                    parent_map,
+                    root_direct,
+                    cache,
+                    visiting,
+                );
+                match parent_scope.as_str() {
+                    "required" => any_required = true,
+                    "optional" => any_optional = true,
+                    _ => all_resolved = false,
+                }
+            }
+            if any_required {
+                "required".into()
+            } else if all_resolved && any_optional {
+                "optional".into()
+            } else {
+                "unknown".into()
+            }
+        } else {
+            // No parents in the graph (orphan) — treat as optional
+            "optional".into()
+        }
+    } else {
+        "unknown".into()
+    };
+
+    visiting.remove(bom_ref);
+    cache.insert(bom_ref.to_string(), result.clone());
+    result
+}
+
+/// For every component with `scope == "unknown"`, infer the scope from the
+/// dependency graph and store it in parentheses (e.g. `"(required)"`).
+fn infer_unknown_scopes(
+    components: &mut BTreeMap<String, Component>,
+    root_direct: &HashSet<String>,
+    dep_graph: &HashMap<String, Vec<String>>,
+    root_ref: &str,
+) {
+    // Build reverse map: child -> list of parent bom_refs (excluding root)
+    let mut parent_map: HashMap<String, Vec<String>> = HashMap::new();
+    for (parent_ref, children) in dep_graph {
+        if parent_ref == root_ref {
+            continue;
+        }
+        for child_ref in children {
+            parent_map
+                .entry(child_ref.clone())
+                .or_default()
+                .push(parent_ref.clone());
+        }
+    }
+
+    // Collect refs that need inference
+    let unknown_refs: Vec<String> = components
+        .iter()
+        .filter(|(_, comp)| comp.scope == "unknown")
+        .map(|(r, _)| r.clone())
+        .collect();
+
+    if unknown_refs.is_empty() {
+        return;
+    }
+
+    // Resolve all unknown scopes
+    let mut cache = HashMap::new();
+    let mut visiting = HashSet::new();
+    let mut inferred: Vec<(String, String)> = Vec::new();
+    for bom_ref in &unknown_refs {
+        let resolved = resolve_scope(
+            bom_ref,
+            components,
+            &parent_map,
+            root_direct,
+            &mut cache,
+            &mut visiting,
+        );
+        let display = if root_direct.contains(bom_ref.as_str()) {
+            resolved
+        } else {
+            format!("({resolved})")
+        };
+        inferred.push((bom_ref.clone(), display));
+    }
+
+    // Apply inferred scopes
+    for (bom_ref, scope) in inferred {
+        if let Some(comp) = components.get_mut(&bom_ref) {
+            comp.scope = scope;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tree building
 // ---------------------------------------------------------------------------
 
@@ -1279,7 +1426,38 @@ pub fn build_tree(
         });
     }
 
-    // 2. Dev groups
+    // 2. Optional: not root direct, not dev, not a child of another component
+    let mut optional_extras: Vec<String> = Vec::new();
+    let grouped_refs: HashSet<&String> = root_direct.iter().chain(dev_refs.iter()).collect();
+    for (bom_ref, comp) in components {
+        if !grouped_refs.contains(bom_ref)
+            && !all_child_refs.contains(bom_ref)
+            && comp.dep_group.is_empty()
+        {
+            optional_extras.push(bom_ref.clone());
+        }
+    }
+    if !optional_extras.is_empty() {
+        optional_extras.sort();
+        let mut children = Vec::new();
+        for r in &optional_extras {
+            children.push(build_subtree(
+                r,
+                components,
+                dep_graph,
+                &mut HashSet::new(),
+                1,
+            ));
+        }
+        roots.push(TreeNode {
+            label: "optional".into(),
+            bom_ref: String::new(),
+            children,
+            depth: 0,
+        });
+    }
+
+    // 3. Dev groups
     let mut dev_groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (bom_ref, comp) in components {
         if !comp.dep_group.is_empty() {
@@ -1304,37 +1482,6 @@ pub fn build_tree(
         }
         roots.push(TreeNode {
             label: format!("dev ({group_name})"),
-            bom_ref: String::new(),
-            children,
-            depth: 0,
-        });
-    }
-
-    // 3. Optional extras: not root direct, not dev, not a child of another component
-    let mut optional_extras: Vec<String> = Vec::new();
-    let grouped_refs: HashSet<&String> = root_direct.iter().chain(dev_refs.iter()).collect();
-    for (bom_ref, comp) in components {
-        if !grouped_refs.contains(bom_ref)
-            && !all_child_refs.contains(bom_ref)
-            && comp.dep_group.is_empty()
-        {
-            optional_extras.push(bom_ref.clone());
-        }
-    }
-    if !optional_extras.is_empty() {
-        optional_extras.sort();
-        let mut children = Vec::new();
-        for r in &optional_extras {
-            children.push(build_subtree(
-                r,
-                components,
-                dep_graph,
-                &mut HashSet::new(),
-                1,
-            ));
-        }
-        roots.push(TreeNode {
-            label: "optional extras".into(),
             bom_ref: String::new(),
             children,
             depth: 0,

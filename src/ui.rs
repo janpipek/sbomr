@@ -247,11 +247,10 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     let header = Row::new(vec![
         sort_header_cell("Name", SortColumn::Name, app),
         sort_header_cell("Version", SortColumn::Version, app),
-        sort_header_cell("License", SortColumn::License, app),
-        sort_header_cell("Type", SortColumn::Type, app),
         sort_header_cell("Registry", SortColumn::Registry, app),
-        Cell::from("Scope"),
-        Cell::from("Group"),
+        sort_header_cell("License", SortColumn::License, app),
+        sort_header_cell("Scope", SortColumn::Scope, app),
+        Cell::from("Type"),
         Cell::from("Description"),
     ])
     .style(Style::default().bold().fg(c.accent).bg(c.bg_surface_alt))
@@ -264,7 +263,6 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         .enumerate()
         .map(|(i, bom_ref)| {
             let comp = &app.sbom.components[bom_ref];
-            let type_color = dep_type_color(&comp.dep_type, c);
 
             let license_style = if comp.licenses.is_empty() {
                 Style::default().fg(c.color_error).italic()
@@ -300,21 +298,16 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
                         Style::default().fg(c.text_muted),
                     )]
                 })),
-                Cell::from(comp.license_str()).style(license_style),
-                Cell::from(comp.dep_type.label()).style(Style::default().fg(type_color)),
                 Cell::from(if comp.registry.is_empty() {
                     "-".to_string()
                 } else {
                     comp.registry.clone()
                 })
                 .style(Style::default().fg(c.text_muted)),
+                Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.scope.clone()).style(Style::default().fg(c.text_muted)),
-                Cell::from(if comp.dep_group.is_empty() {
-                    "-".to_string()
-                } else {
-                    comp.dep_group.clone()
-                })
-                .style(Style::default().fg(c.text_muted)),
+                Cell::from(comp.dep_type.label())
+                    .style(Style::default().fg(dep_type_color(&comp.dep_type, c))),
                 Cell::from(truncate(&comp.description, 50))
                     .style(Style::default().fg(c.text_muted)),
             ])
@@ -325,11 +318,10 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
     let widths = [
         Constraint::Length(22), // Name
         Constraint::Length(10), // Version
-        Constraint::Length(28), // License
-        Constraint::Length(14), // Type
         Constraint::Length(10), // Registry
-        Constraint::Length(10), // Scope
-        Constraint::Length(8),  // Group
+        Constraint::Length(28), // License
+        Constraint::Length(14), // Scope
+        Constraint::Length(14), // Type
         Constraint::Min(20),    // Description
     ];
 
@@ -341,9 +333,9 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         let sortable_columns: [(usize, SortColumn); 5] = [
             (0, SortColumn::Name),
             (1, SortColumn::Version),
-            (2, SortColumn::License),
-            (3, SortColumn::Type),
-            (4, SortColumn::Registry),
+            (2, SortColumn::Registry),
+            (3, SortColumn::License),
+            (4, SortColumn::Scope),
         ];
         let content_width = area.width.saturating_sub(2); // minus left+right borders
         let resolved = resolve_widths(&widths, content_width.saturating_sub(2)); // minus highlight symbol
@@ -1221,14 +1213,13 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         }
     } else if let Some(bom_ref) = app.selected_bom_ref() {
         if let Some(comp) = app.sbom.components.get(bom_ref) {
-            let type_color = dep_type_color(&comp.dep_type, c);
             let license_style = if comp.licenses.is_empty() {
                 Style::default().fg(c.color_error).italic()
             } else {
                 Style::default().fg(c.text)
             };
 
-            // Line 1: name, version, type, license, outdated indicator
+            // Line 1: name, version, scope, license, outdated indicator
             let mut line1 = vec![
                 Span::styled(&comp.name, Style::default().bold().fg(c.text_bright)),
                 Span::styled(
@@ -1242,7 +1233,11 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
                     Style::default().fg(c.color_warning).bold(),
                 ));
             }
+            let type_color = dep_type_color(&comp.dep_type, c);
             line1.extend([
+                Span::styled("  │  ", Style::default().fg(c.border)),
+                Span::styled("Scope ", Style::default().fg(c.text_muted)),
+                Span::styled(&comp.scope, Style::default().fg(c.text).bold()),
                 Span::styled("  │  ", Style::default().fg(c.border)),
                 Span::styled("Type ", Style::default().fg(c.text_muted)),
                 Span::styled(
@@ -1503,7 +1498,7 @@ fn dep_type_color(dt: &DepType, c: &ThemeColors) -> Color {
         DepType::Required => c.color_required,
         DepType::Dev(_) => c.color_dev,
         DepType::Optional => c.color_optional,
-        DepType::Transitive => c.color_transitive,
+        DepType::Transitive => c.text_muted,
     }
 }
 

@@ -74,7 +74,7 @@ pub enum SortColumn {
     Name,
     Version,
     License,
-    Type,
+    Scope,
     Registry,
 }
 
@@ -83,9 +83,9 @@ impl SortColumn {
     pub const ALL: &[SortColumn] = &[
         SortColumn::Name,
         SortColumn::Version,
-        SortColumn::License,
-        SortColumn::Type,
         SortColumn::Registry,
+        SortColumn::License,
+        SortColumn::Scope,
     ];
 
     pub fn label(self) -> &'static str {
@@ -93,7 +93,7 @@ impl SortColumn {
             SortColumn::Name => "Name",
             SortColumn::Version => "Version",
             SortColumn::License => "License",
-            SortColumn::Type => "Type",
+            SortColumn::Scope => "Scope",
             SortColumn::Registry => "Registry",
         }
     }
@@ -132,21 +132,21 @@ impl SortDirection {
 pub enum FilterColumn {
     Name,
     License,
-    Type,
+    Scope,
 }
 
 impl FilterColumn {
     pub const ALL: &[FilterColumn] = &[
         FilterColumn::Name,
         FilterColumn::License,
-        FilterColumn::Type,
+        FilterColumn::Scope,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
             FilterColumn::Name => "Name",
             FilterColumn::License => "License",
-            FilterColumn::Type => "Type",
+            FilterColumn::Scope => "Scope",
         }
     }
 
@@ -297,7 +297,7 @@ impl App {
             theme,
             table_state: TableState::default(),
             visible_rows: Vec::new(),
-            sort_column: SortColumn::Type,
+            sort_column: SortColumn::Name,
             sort_direction: SortDirection::Asc,
             filter_column: FilterColumn::Name,
             filter_text: String::new(),
@@ -446,9 +446,7 @@ impl App {
                     FilterColumn::License => {
                         comp.license_str().to_lowercase().contains(&filter_lower)
                     }
-                    FilterColumn::Type => {
-                        comp.dep_type.label().to_lowercase().contains(&filter_lower)
-                    }
+                    FilterColumn::Scope => comp.scope.to_lowercase().contains(&filter_lower),
                 }
             })
             .cloned()
@@ -877,10 +875,10 @@ fn compare_by_column(a: &Component, b: &Component, col: SortColumn) -> std::cmp:
             .license_str()
             .to_lowercase()
             .cmp(&b.license_str().to_lowercase()),
-        SortColumn::Type => a
-            .dep_type
-            .sort_key()
-            .cmp(&b.dep_type.sort_key())
+        SortColumn::Scope => a
+            .scope
+            .to_lowercase()
+            .cmp(&b.scope.to_lowercase())
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
         SortColumn::Registry => a
             .registry
