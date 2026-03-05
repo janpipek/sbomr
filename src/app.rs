@@ -12,6 +12,7 @@ use ratatui::widgets::TableState;
 pub enum Tab {
     Table,
     Tree,
+    Vulns,
     Metadata,
     Json,
 }
@@ -20,7 +21,8 @@ impl Tab {
     pub fn next(self) -> Self {
         match self {
             Tab::Table => Tab::Tree,
-            Tab::Tree => Tab::Metadata,
+            Tab::Tree => Tab::Vulns,
+            Tab::Vulns => Tab::Metadata,
             Tab::Metadata => Tab::Json,
             Tab::Json => Tab::Table,
         }
@@ -30,7 +32,8 @@ impl Tab {
         match self {
             Tab::Table => Tab::Json,
             Tab::Tree => Tab::Table,
-            Tab::Metadata => Tab::Tree,
+            Tab::Vulns => Tab::Tree,
+            Tab::Metadata => Tab::Vulns,
             Tab::Json => Tab::Metadata,
         }
     }
@@ -221,6 +224,8 @@ pub struct ClickAreas {
     pub tree_body: Option<Rect>,
     /// Area of the JSON viewer body (rows)
     pub json_body: Option<Rect>,
+    /// Area of the vulnerability table body
+    pub vuln_body: Option<Rect>,
     /// Panel title bars that act as tab switches: (area, Tab)
     pub panel_titles: Vec<(Rect, Tab)>,
 }
@@ -257,6 +262,10 @@ pub struct App {
     pub tree_roots: Vec<StatefulNode>,
     pub flat_tree: Vec<FlatTreeLine>,
 
+    // Vulnerabilities table
+    pub vuln_table_state: TableState,
+    pub vuln_count: usize,
+
     // Metadata scroll
     pub metadata_scroll_offset: usize,
     pub metadata_line_count: usize,
@@ -280,6 +289,7 @@ impl App {
         let json_root = sbom.json_root.clone();
         let flat_json = flatten_json(&json_root);
 
+        let vuln_count = sbom.vulnerabilities.len();
         let mut app = App {
             sbom,
             active_tab: Tab::Table,
@@ -297,6 +307,8 @@ impl App {
             tree_scroll_offset: 0,
             tree_roots,
             flat_tree,
+            vuln_table_state: TableState::default(),
+            vuln_count,
             metadata_scroll_offset: 0,
             metadata_line_count: 0,
             json_root,
@@ -333,8 +345,12 @@ impl App {
                 .get(self.tree_selected)
                 .filter(|l| !l.bom_ref.is_empty())
                 .map(|l| l.bom_ref.as_str()),
-            Tab::Metadata | Tab::Json => None,
+            Tab::Vulns | Tab::Metadata | Tab::Json => None,
         }
+    }
+
+    pub fn vuln_selected(&self) -> usize {
+        self.vuln_table_state.selected().unwrap_or(0)
     }
 
     pub fn has_active_filter(&self) -> bool {
@@ -597,6 +613,12 @@ impl App {
                     self.tree_selected -= 1;
                 }
             }
+            Tab::Vulns => {
+                let i = self.vuln_selected();
+                if i > 0 {
+                    self.vuln_table_state.select(Some(i - 1));
+                }
+            }
             Tab::Json => {
                 if self.json_selected > 0 {
                     self.json_selected -= 1;
@@ -623,6 +645,12 @@ impl App {
                     self.tree_selected += 1;
                 }
             }
+            Tab::Vulns => {
+                let i = self.vuln_selected();
+                if i + 1 < self.vuln_count {
+                    self.vuln_table_state.select(Some(i + 1));
+                }
+            }
             Tab::Json => {
                 if self.json_selected + 1 < self.json_len() {
                     self.json_selected += 1;
@@ -642,6 +670,10 @@ impl App {
             }
             Tab::Tree => {
                 self.tree_selected = self.tree_selected.saturating_sub(page_size);
+            }
+            Tab::Vulns => {
+                let i = self.vuln_selected().saturating_sub(page_size);
+                self.vuln_table_state.select(Some(i));
             }
             Tab::Json => {
                 self.json_selected = self.json_selected.saturating_sub(page_size);
@@ -663,6 +695,11 @@ impl App {
                 let max = self.tree_len().saturating_sub(1);
                 self.tree_selected = (self.tree_selected + page_size).min(max);
             }
+            Tab::Vulns => {
+                let max = self.vuln_count.saturating_sub(1);
+                let i = (self.vuln_selected() + page_size).min(max);
+                self.vuln_table_state.select(Some(i));
+            }
             Tab::Json => {
                 let max = self.json_len().saturating_sub(1);
                 self.json_selected = (self.json_selected + page_size).min(max);
@@ -678,6 +715,7 @@ impl App {
         match self.active_tab {
             Tab::Table => self.table_state.select(Some(0)),
             Tab::Tree => self.tree_selected = 0,
+            Tab::Vulns => self.vuln_table_state.select(Some(0)),
             Tab::Json => self.json_selected = 0,
             Tab::Metadata => self.metadata_scroll_offset = 0,
         }
@@ -689,6 +727,9 @@ impl App {
                 .table_state
                 .select(Some(self.table_len().saturating_sub(1))),
             Tab::Tree => self.tree_selected = self.tree_len().saturating_sub(1),
+            Tab::Vulns => self
+                .vuln_table_state
+                .select(Some(self.vuln_count.saturating_sub(1))),
             Tab::Json => self.json_selected = self.json_len().saturating_sub(1),
             Tab::Metadata => {
                 self.metadata_scroll_offset = self.metadata_line_count.saturating_sub(1);

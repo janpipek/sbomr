@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 use crate::app::{App, ClickAreas, InputMode, SortColumn, Tab};
-use crate::sbom::DepType;
+use crate::sbom::{DepType, VulnSeverity};
 use crate::theme::ThemeColors;
 
 // ---------------------------------------------------------------------------
@@ -68,6 +68,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     match app.active_tab {
         Tab::Table => draw_table(frame, app, main_area, &c),
         Tab::Tree => draw_tree(frame, app, main_area, &c),
+        Tab::Vulns => draw_vulns(frame, app, main_area, &c),
         Tab::Metadata => draw_metadata(frame, app, main_area, &c),
         Tab::Json => draw_json(frame, app, main_area, &c),
     }
@@ -107,7 +108,7 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         .sbom
         .components
         .values()
-        .filter(|c| c.vuln_count > 0)
+        .filter(|c| c.vuln_count() > 0)
         .count();
 
     let mut spans = vec![
@@ -178,17 +179,24 @@ fn draw_summary(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 
 fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    let vuln_label = if app.vuln_count > 0 {
+        format!(" Vulnerabilities ({}) ", app.vuln_count)
+    } else {
+        " Vulnerabilities ".to_string()
+    };
     let titles = vec![
-        " Dependency List ",
-        " Dependency Tree ",
-        " Metadata ",
-        " JSON ",
+        " Dependency List ".to_string(),
+        " Dependency Tree ".to_string(),
+        vuln_label,
+        " Metadata ".to_string(),
+        " JSON ".to_string(),
     ];
     let selected = match app.active_tab {
         Tab::Table => 0,
         Tab::Tree => 1,
-        Tab::Metadata => 2,
-        Tab::Json => 3,
+        Tab::Vulns => 2,
+        Tab::Metadata => 3,
+        Tab::Json => 4,
     };
     let tabs = Tabs::new(titles.clone())
         .select(selected)
@@ -204,7 +212,7 @@ fn draw_tabs(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 
     // Tabs widget renders: pad_left(1) + title + pad_right(1) + divider(1) per tab.
     // The last tab has no divider. Account for padding to align click areas correctly.
-    let tab_variants = [Tab::Table, Tab::Tree, Tab::Metadata, Tab::Json];
+    let tab_variants = [Tab::Table, Tab::Tree, Tab::Vulns, Tab::Metadata, Tab::Json];
     let area_end = area.x + area.width;
     let pad = 1u16; // default Tabs padding on each side
     let divider_w = 1u16;
@@ -271,7 +279,16 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
             };
 
             Row::new(vec![
-                Cell::from(comp.name.clone()).style(Style::default().fg(c.text)),
+                Cell::from(Line::from(if comp.vuln_count() > 0 {
+                    let sev = comp.max_severity().unwrap_or(VulnSeverity::Unknown);
+                    let sev_color = severity_color(sev, c);
+                    vec![
+                        Span::styled(&comp.name, Style::default().fg(c.text)),
+                        Span::styled(" !", Style::default().fg(sev_color).bold()),
+                    ]
+                } else {
+                    vec![Span::styled(&comp.name, Style::default().fg(c.text))]
+                })),
                 Cell::from(Line::from(if comp.is_outdated() {
                     vec![
                         Span::styled(&comp.version, Style::default().fg(c.text_muted)),
@@ -608,6 +625,128 @@ fn draw_tree(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 }
 
 // ---------------------------------------------------------------------------
+// Vulnerabilities tab
+// ---------------------------------------------------------------------------
+
+fn draw_vulns(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    if app.sbom.vulnerabilities.is_empty() {
+        let msg = Paragraph::new("No vulnerabilities found")
+            .style(Style::default().fg(c.text_muted).italic())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(c.border_active))
+                    .title(" Vulnerabilities ")
+                    .title_style(Style::default().fg(c.accent).bold()),
+            );
+        frame.render_widget(msg, area);
+        return;
+    }
+
+    let rows: Vec<Row> = app
+        .sbom
+        .vulnerabilities
+        .iter()
+        .enumerate()
+        .map(|(i, vuln)| {
+            let sev_color = severity_color(vuln.severity, c);
+            let affected = vuln.affected_packages(&app.sbom.components);
+            let pkg_str = affected.join(", ");
+
+            let score_str = vuln
+                .cvss_score
+                .map(|s| format!("{s:.1}"))
+                .unwrap_or_else(|| "-".into());
+
+            let row_bg = if i % 2 == 1 {
+                c.bg_surface_alt
+            } else {
+                c.bg_surface
+            };
+
+            Row::new(vec![
+                Cell::from(vuln.id.clone()).style(Style::default().fg(c.text)),
+                Cell::from(Line::from(Span::styled(
+                    vuln.severity.label().to_uppercase(),
+                    Style::default().fg(sev_color).bold(),
+                ))),
+                Cell::from(score_str).style(Style::default().fg(sev_color)),
+                Cell::from(pkg_str).style(Style::default().fg(c.text_muted)),
+                Cell::from(vuln.cwes_str()).style(Style::default().fg(c.text_muted)),
+                Cell::from(vuln.published_date().to_string())
+                    .style(Style::default().fg(c.text_muted)),
+                Cell::from(truncate(&vuln.recommendation, 40))
+                    .style(Style::default().fg(c.text_muted)),
+            ])
+            .style(Style::default().bg(row_bg))
+        })
+        .collect();
+
+    let widths = [
+        Constraint::Length(18), // ID
+        Constraint::Length(10), // Severity
+        Constraint::Length(6),  // Score
+        Constraint::Length(25), // Package
+        Constraint::Length(10), // CWE
+        Constraint::Length(12), // Published
+        Constraint::Min(20),    // Recommendation
+    ];
+
+    let header = Row::new(vec![
+        Cell::from("ID").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("Severity").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("Score").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("Package").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("CWE").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("Published").style(Style::default().bold().fg(c.text_bright)),
+        Cell::from("Fix").style(Style::default().bold().fg(c.text_bright)),
+    ])
+    .style(Style::default().bg(c.bg_primary));
+
+    let visible_height = area.height.saturating_sub(3) as usize;
+
+    let table = Table::new(rows, widths)
+        .header(header)
+        .row_highlight_style(Style::default().bg(c.bg_highlight).fg(c.text_bright).bold())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(c.border_active))
+                .title(format!(
+                    " Vulnerabilities ({}) ",
+                    app.sbom.vulnerabilities.len()
+                ))
+                .title_style(Style::default().fg(c.accent).bold()),
+        );
+
+    frame.render_stateful_widget(table, area, &mut app.vuln_table_state);
+
+    // Scrollbar
+    if app.vuln_count > visible_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(app.vuln_count.saturating_sub(visible_height))
+                .position(app.vuln_selected());
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
+            area,
+            &mut scrollbar_state,
+        );
+    }
+
+    // Record click area for the title bar
+    let title_bar = Rect::new(area.x, area.y, area.width, 1);
+    app.click_areas.panel_titles.push((title_bar, Tab::Table));
+
+    // Record the table body area for mouse clicks
+    let body = Rect::new(area.x + 1, area.y + 2, area.width - 2, area.height - 3);
+    app.click_areas.vuln_body = Some(body);
+}
+
+// ---------------------------------------------------------------------------
 // Metadata tab
 // ---------------------------------------------------------------------------
 
@@ -758,7 +897,7 @@ fn draw_metadata(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) 
         .sbom
         .components
         .values()
-        .filter(|comp| comp.vuln_count > 0)
+        .filter(|comp| comp.vuln_count() > 0)
         .count();
     let copyleft = app
         .sbom
@@ -994,31 +1133,92 @@ fn draw_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 
 fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
-    let content = if app.active_tab == Tab::Metadata {
-        // On the Metadata tab, show SBOM-level info instead of per-component detail
-        vec![
-            Line::from(vec![
+    let content = if app.active_tab == Tab::Vulns {
+        // Vulnerability detail
+        let idx = app.vuln_selected();
+        if let Some(vuln) = app.sbom.vulnerabilities.get(idx) {
+            let sev_color = severity_color(vuln.severity, c);
+            let affected = vuln.affected_packages(&app.sbom.components);
+
+            // Line 1: ID, severity, score, affected packages
+            let mut line1 = vec![
+                Span::styled(&vuln.id, Style::default().bold().fg(c.text_bright)),
+                Span::styled("  ", Style::default()),
                 Span::styled(
-                    &app.sbom.root_name,
-                    Style::default().bold().fg(c.text_bright),
+                    vuln.severity.label().to_uppercase(),
+                    Style::default().fg(sev_color).bold(),
                 ),
-                Span::styled(
-                    format!(" v{}", app.sbom.root_version),
+            ];
+            if let Some(score) = vuln.cvss_score {
+                line1.extend([
+                    Span::styled("  ", Style::default()),
+                    Span::styled(
+                        format!("{score:.1} {}", vuln.cvss_method),
+                        Style::default().fg(sev_color),
+                    ),
+                ]);
+            }
+            if !affected.is_empty() {
+                line1.extend([
+                    Span::styled("  │  ", Style::default().fg(c.border)),
+                    Span::styled(affected.join(", "), Style::default().fg(c.text)),
+                ]);
+            }
+
+            // Line 2: description (truncated)
+            let desc = if vuln.description.len() > 200 {
+                format!("{}…", &vuln.description[..200])
+            } else {
+                vuln.description.clone()
+            };
+
+            // Line 3: recommendation + CWEs
+            let mut line3 = Vec::new();
+            if !vuln.recommendation.is_empty() {
+                line3.push(Span::styled(
+                    &vuln.recommendation,
+                    Style::default().fg(c.color_required),
+                ));
+            }
+            if !vuln.cwes.is_empty() {
+                if !line3.is_empty() {
+                    line3.push(Span::styled("  │  ", Style::default().fg(c.border)));
+                }
+                line3.push(Span::styled(
+                    vuln.cwes_str(),
                     Style::default().fg(c.text_muted),
-                ),
-                Span::styled("  │  ", Style::default().fg(c.border)),
-                Span::styled(
-                    format!("{} components", app.sbom.components.len()),
-                    Style::default().fg(c.text),
-                ),
-            ]),
-            Line::from(Span::styled(
-                "Use Dependency List or Dependency Tree tabs to select a component",
-                Style::default().fg(c.text_muted).italic(),
-            )),
-            Line::from(""),
-            Line::from(""),
-        ]
+                ));
+            }
+
+            // Line 4: advisory URLs
+            let adv_str = if vuln.advisories.is_empty() {
+                String::new()
+            } else {
+                vuln.advisories
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("  ")
+            };
+
+            vec![
+                Line::from(line1),
+                Line::from(Span::styled(desc, Style::default().fg(c.text_muted))),
+                Line::from(line3),
+                Line::from(Span::styled(adv_str, Style::default().fg(c.accent))),
+            ]
+        } else {
+            vec![
+                Line::from(Span::styled(
+                    "No vulnerabilities",
+                    Style::default().fg(c.text_muted).italic(),
+                )),
+                Line::from(""),
+                Line::from(""),
+                Line::from(""),
+            ]
+        }
     } else if let Some(bom_ref) = app.selected_bom_ref() {
         if let Some(comp) = app.sbom.components.get(bom_ref) {
             let type_color = dep_type_color(&comp.dep_type, c);
@@ -1059,14 +1259,27 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
                     Style::default().fg(c.color_warning),
                 ));
             }
-            if comp.vuln_count > 0 {
+            if comp.vuln_count() > 0 {
+                let sev = comp.max_severity().unwrap_or(VulnSeverity::Unknown);
+                let sev_color = severity_color(sev, c);
                 line1.extend([
                     Span::styled("  │  ", Style::default().fg(c.border)),
                     Span::styled(
-                        format!("{} vuln(s)", comp.vuln_count),
-                        Style::default().fg(c.color_error).bold(),
+                        format!("! {} vuln(s) [{}]", comp.vuln_count(), sev.label()),
+                        Style::default().fg(sev_color).bold(),
                     ),
                 ]);
+                // List individual vulns with their severity
+                for v in &comp.vulns {
+                    let vc = severity_color(v.severity, c);
+                    line1.extend([
+                        Span::styled(" ", Style::default()),
+                        Span::styled(
+                            format!("{} ({})", v.id, v.severity.label()),
+                            Style::default().fg(vc),
+                        ),
+                    ]);
+                }
             }
             if let Some(conf) = comp.confidence {
                 line1.extend([
@@ -1274,6 +1487,16 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn severity_color(sev: VulnSeverity, c: &ThemeColors) -> Color {
+    match sev {
+        VulnSeverity::Critical => c.vuln_critical,
+        VulnSeverity::High => c.vuln_high,
+        VulnSeverity::Medium => c.vuln_medium,
+        VulnSeverity::Low => c.vuln_low,
+        _ => c.color_error,
+    }
+}
 
 fn dep_type_color(dt: &DepType, c: &ThemeColors) -> Color {
     match dt {

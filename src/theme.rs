@@ -53,6 +53,12 @@ pub struct ThemeColors {
     pub color_error: Color,
     pub color_warning: Color,
 
+    // Vulnerability severity
+    pub vuln_critical: Color,
+    pub vuln_high: Color,
+    pub vuln_medium: Color,
+    pub vuln_low: Color,
+
     // Borders / guides
     pub border: Color,
     pub border_active: Color,
@@ -81,6 +87,11 @@ impl ThemeColors {
             color_error: Color::Rgb(230, 80, 80),
             color_warning: Color::Rgb(255, 200, 50),
 
+            vuln_critical: Color::Rgb(230, 50, 50),
+            vuln_high: Color::Rgb(255, 120, 50),
+            vuln_medium: Color::Rgb(255, 200, 50),
+            vuln_low: Color::Rgb(255, 255, 100),
+
             border: Color::Rgb(60, 60, 60),
             border_active: Color::Rgb(80, 80, 90),
             tree_guide: Color::Rgb(70, 70, 70),
@@ -107,6 +118,11 @@ impl ThemeColors {
             color_transitive: Color::Rgb(110, 110, 110),
             color_error: Color::Rgb(200, 40, 40),
             color_warning: Color::Rgb(180, 140, 0),
+
+            vuln_critical: Color::Rgb(200, 30, 30),
+            vuln_high: Color::Rgb(220, 90, 20),
+            vuln_medium: Color::Rgb(180, 140, 0),
+            vuln_low: Color::Rgb(160, 160, 0),
 
             border: Color::Rgb(200, 200, 200),
             border_active: Color::Rgb(160, 160, 170),

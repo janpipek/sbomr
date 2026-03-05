@@ -169,7 +169,19 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
                 }
             }
 
-            // 6. Check JSON body clicks
+            // 6. Check vulnerability table body clicks
+            if app.active_tab == app::Tab::Vulns
+                && let Some(body) = app.click_areas.vuln_body
+                && in_rect(col, row, body)
+            {
+                let offset = app.vuln_table_state.offset();
+                let clicked_row = (row - body.y) as usize + offset;
+                if clicked_row < app.vuln_count {
+                    app.vuln_table_state.select(Some(clicked_row));
+                }
+            }
+
+            // 7. Check JSON body clicks
             if app.active_tab == app::Tab::Json
                 && let Some(body) = app.click_areas.json_body
                 && in_rect(col, row, body)
@@ -296,9 +308,16 @@ fn run_loop(
                     KeyCode::Char('t') => {
                         app.toggle_theme();
                     }
-                    // Open package registry URL in browser
+                    // Open URL in browser (registry URL or vuln advisory)
                     KeyCode::Char('o') => {
-                        if let Some(bom_ref) = app.selected_bom_ref()
+                        if app.active_tab == app::Tab::Vulns {
+                            let idx = app.vuln_table_state.selected().unwrap_or(0);
+                            if let Some(vuln) = app.sbom.vulnerabilities.get(idx)
+                                && let Some(url) = vuln.advisories.first()
+                            {
+                                let _ = open_url(url);
+                            }
+                        } else if let Some(bom_ref) = app.selected_bom_ref()
                             && let Some(comp) = app.sbom.components.get(bom_ref)
                             && let Some(url) = comp.registry_url()
                         {

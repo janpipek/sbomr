@@ -77,6 +77,8 @@ struct RawComponent {
     purl: Option<String>,
     #[serde(default, rename = "bom-ref")]
     bom_ref: Option<String>,
+    #[serde(rename = "type")]
+    comp_type: Option<String>,
     scope: Option<String>,
     #[serde(default)]
     licenses: Vec<RawLicenseEntry>,
@@ -146,8 +148,38 @@ struct RawDependency {
 #[serde(rename_all = "camelCase")]
 struct RawVulnerability {
     id: Option<String>,
+    source: Option<RawVulnSource>,
+    description: Option<String>,
+    recommendation: Option<String>,
+    #[serde(default)]
+    ratings: Vec<RawRating>,
+    #[serde(default)]
+    cwes: Vec<u32>,
+    #[serde(default)]
+    advisories: Vec<RawAdvisory>,
+    published: Option<String>,
+    updated: Option<String>,
     #[serde(default)]
     affects: Vec<RawAffects>,
+}
+
+#[derive(Deserialize)]
+struct RawVulnSource {
+    name: Option<String>,
+    url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawRating {
+    severity: Option<String>,
+    score: Option<f64>,
+    method: Option<String>,
+    vector: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawAdvisory {
+    url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -189,6 +221,114 @@ impl DepType {
     }
 }
 
+/// Vulnerability severity level (CycloneDX spec).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum VulnSeverity {
+    Unknown,
+    None,
+    Info,
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl VulnSeverity {
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "critical" => VulnSeverity::Critical,
+            "high" => VulnSeverity::High,
+            "medium" => VulnSeverity::Medium,
+            "low" => VulnSeverity::Low,
+            "info" => VulnSeverity::Info,
+            "none" => VulnSeverity::None,
+            _ => VulnSeverity::Unknown,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            VulnSeverity::Critical => "critical",
+            VulnSeverity::High => "high",
+            VulnSeverity::Medium => "medium",
+            VulnSeverity::Low => "low",
+            VulnSeverity::Info => "info",
+            VulnSeverity::None => "none",
+            VulnSeverity::Unknown => "unknown",
+        }
+    }
+}
+
+/// A single vulnerability affecting a component.
+#[derive(Debug, Clone)]
+pub struct VulnEntry {
+    pub id: String,
+    pub severity: VulnSeverity,
+}
+
+/// A CVSS rating from a specific source.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct VulnRating {
+    pub source: String,
+    pub severity: VulnSeverity,
+    pub score: Option<f64>,
+    pub method: String,
+    pub vector: String,
+}
+
+/// Full vulnerability record for the Vulnerabilities tab.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct Vulnerability {
+    pub id: String,
+    pub source_name: String,
+    pub source_url: String,
+    pub severity: VulnSeverity,
+    pub cvss_score: Option<f64>,
+    pub cvss_method: String,
+    pub description: String,
+    pub recommendation: String,
+    pub cwes: Vec<u32>,
+    pub advisories: Vec<String>,
+    pub published: String,
+    pub updated: String,
+    pub affected_refs: Vec<String>,
+    pub ratings: Vec<VulnRating>,
+}
+
+impl Vulnerability {
+    /// Affected package names (looked up from components).
+    pub fn affected_packages(&self, components: &BTreeMap<String, Component>) -> Vec<String> {
+        self.affected_refs
+            .iter()
+            .filter_map(|r| {
+                components
+                    .get(r)
+                    .map(|c| format!("{}@{}", c.name, c.version))
+            })
+            .collect()
+    }
+
+    /// Short date from the published timestamp (YYYY-MM-DD).
+    pub fn published_date(&self) -> &str {
+        self.published.get(..10).unwrap_or(&self.published)
+    }
+
+    /// CWE IDs as a comma-separated string.
+    pub fn cwes_str(&self) -> String {
+        if self.cwes.is_empty() {
+            "-".into()
+        } else {
+            self.cwes
+                .iter()
+                .map(|c| format!("CWE-{c}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Component {
@@ -214,10 +354,8 @@ pub struct Component {
     pub vcs_url: String,
     /// Evidence confidence score (0.0–1.0), or None if unavailable.
     pub confidence: Option<f64>,
-    /// Number of known vulnerabilities affecting this component.
-    pub vuln_count: usize,
-    /// Vulnerability IDs affecting this component.
-    pub vuln_ids: Vec<String>,
+    /// Known vulnerabilities affecting this component.
+    pub vulns: Vec<VulnEntry>,
 }
 
 impl Component {
@@ -245,6 +383,16 @@ impl Component {
             let upper = lic.to_uppercase();
             COPYLEFT.iter().any(|cp| upper.contains(cp))
         })
+    }
+
+    /// Number of known vulnerabilities.
+    pub fn vuln_count(&self) -> usize {
+        self.vulns.len()
+    }
+
+    /// Highest severity among all vulnerabilities, or `None` if no vulns.
+    pub fn max_severity(&self) -> Option<VulnSeverity> {
+        self.vulns.iter().map(|v| v.severity).max()
     }
 }
 
@@ -410,6 +558,7 @@ pub struct SBOMData {
     pub tree_roots: Vec<TreeNode>,               // top-level tree categories
     pub metadata: SBOMMetadata,
     pub json_root: JsonNode, // collapsible JSON tree for the JSON viewer
+    pub vulnerabilities: Vec<Vulnerability>, // parsed vulnerability records
     // Retained for rebuilding trees with different groupings:
     pub root_direct: HashSet<String>,
     pub dev_refs: HashSet<String>,
@@ -685,16 +834,111 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         }
     };
 
-    // --- Vulnerability index: bom-ref -> list of vuln IDs ---
-    let mut vuln_map: HashMap<String, Vec<String>> = HashMap::new();
+    // --- Parse vulnerabilities ---
+    let mut vuln_map: HashMap<String, Vec<VulnEntry>> = HashMap::new();
+    let mut vulnerabilities: Vec<Vulnerability> = Vec::new();
+
     for v in &raw.vulnerabilities {
         let vid = v.id.clone().unwrap_or_default();
-        for a in &v.affects {
-            if let Some(r) = &a.affects_ref {
-                vuln_map.entry(r.clone()).or_default().push(vid.clone());
-            }
+
+        // Parse all ratings
+        let ratings: Vec<VulnRating> = v
+            .ratings
+            .iter()
+            .map(|r| VulnRating {
+                source: String::new(), // rating-level source not always present
+                severity: VulnSeverity::from_str(r.severity.as_deref().unwrap_or("unknown")),
+                score: r.score,
+                method: r.method.clone().unwrap_or_default(),
+                vector: r.vector.clone().unwrap_or_default(),
+            })
+            .collect();
+
+        let severity = ratings
+            .iter()
+            .map(|r| r.severity)
+            .max()
+            .unwrap_or(VulnSeverity::Unknown);
+
+        // Best CVSS score: prefer CVSSv3/v31, fall back to highest score
+        let (cvss_score, cvss_method) = ratings
+            .iter()
+            .filter(|r| r.score.is_some())
+            .max_by(|a, b| {
+                let method_rank = |m: &str| -> u8 {
+                    if m.contains('3') {
+                        2
+                    } else if m.contains('2') {
+                        1
+                    } else {
+                        0
+                    }
+                };
+                method_rank(&a.method)
+                    .cmp(&method_rank(&b.method))
+                    .then_with(|| {
+                        a.score
+                            .partial_cmp(&b.score)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+            })
+            .map(|r| (r.score, r.method.clone()))
+            .unwrap_or((None, String::new()));
+
+        let affected_refs: Vec<String> = v
+            .affects
+            .iter()
+            .filter_map(|a| a.affects_ref.clone())
+            .collect();
+
+        let advisories: Vec<String> = v.advisories.iter().filter_map(|a| a.url.clone()).collect();
+
+        // Per-component vuln index
+        let entry = VulnEntry {
+            id: vid.clone(),
+            severity,
+        };
+        for r in &affected_refs {
+            vuln_map.entry(r.clone()).or_default().push(entry.clone());
         }
+
+        vulnerabilities.push(Vulnerability {
+            id: vid,
+            source_name: v
+                .source
+                .as_ref()
+                .and_then(|s| s.name.clone())
+                .unwrap_or_default(),
+            source_url: v
+                .source
+                .as_ref()
+                .and_then(|s| s.url.clone())
+                .unwrap_or_default(),
+            severity,
+            cvss_score,
+            cvss_method,
+            description: v.description.clone().unwrap_or_default(),
+            recommendation: v.recommendation.clone().unwrap_or_default(),
+            cwes: v.cwes.clone(),
+            advisories,
+            published: v.published.clone().unwrap_or_default(),
+            updated: v.updated.clone().unwrap_or_default(),
+            affected_refs,
+            ratings,
+        });
     }
+
+    // Sort vulnerabilities: critical first, then by score descending
+    vulnerabilities.sort_by(|a, b| {
+        b.severity
+            .cmp(&a.severity)
+            .then_with(|| {
+                b.cvss_score
+                    .partial_cmp(&a.cvss_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| a.id.cmp(&b.id))
+    });
 
     // Root component
     let meta_comp = meta.and_then(|m| m.component.as_ref());
@@ -712,6 +956,97 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
     let mut dep_graph: HashMap<String, Vec<String>> = HashMap::new();
     for dep in &raw.dependencies {
         dep_graph.insert(dep.dep_ref.clone(), dep.depends_on.clone());
+    }
+
+    // Detect lock-file intermediary components (trivy pattern):
+    // type="application" components that sit between root and actual packages.
+    // We remove them from the graph, promote their children to root direct deps,
+    // and record the lock-file name as source_file for their children.
+    let mut lockfile_refs: HashSet<String> = HashSet::new();
+    let mut lockfile_source: HashMap<String, String> = HashMap::new(); // child_ref -> lock file name
+    {
+        let component_map: HashMap<String, &RawComponent> = raw
+            .components
+            .iter()
+            .filter_map(|rc| {
+                let br = rc.bom_ref.clone().or_else(|| rc.purl.clone())?;
+                Some((br, rc))
+            })
+            .collect();
+
+        let root_children: Vec<String> = dep_graph.get(&root_ref).cloned().unwrap_or_default();
+
+        for child_ref in &root_children {
+            if let Some(rc) = component_map.get(child_ref)
+                && rc.comp_type.as_deref() == Some("application")
+                && child_ref != &root_ref
+            {
+                let lock_name = rc.name.clone().unwrap_or_default();
+                lockfile_refs.insert(child_ref.clone());
+                // Walk all transitive descendants and record source_file
+                let mut stack: Vec<String> = dep_graph.get(child_ref).cloned().unwrap_or_default();
+                let mut visited: HashSet<String> = HashSet::new();
+                while let Some(desc) = stack.pop() {
+                    if visited.insert(desc.clone()) {
+                        lockfile_source.insert(desc.clone(), lock_name.clone());
+                        if let Some(children) = dep_graph.get(&desc) {
+                            stack.extend(children.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Promote lock-file children to root direct deps
+        if !lockfile_refs.is_empty() {
+            let mut new_root_deps: Vec<String> = dep_graph
+                .get(&root_ref)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|r| !lockfile_refs.contains(r))
+                .collect();
+            for lf_ref in &lockfile_refs {
+                if let Some(children) = dep_graph.get(lf_ref) {
+                    new_root_deps.extend(children.clone());
+                }
+                dep_graph.remove(lf_ref);
+            }
+
+            // Second pass: trivy often chains lock_file → project_component → deps.
+            // If a lock file had exactly one child that itself has dependencies,
+            // that child is the project component — skip it and promote its deps.
+            for lf_ref in &lockfile_refs.clone() {
+                // We already removed the lock file's entry; check via lockfile_source
+                // which refs were the lock file's direct children.
+                let lf_direct: Vec<String> = new_root_deps
+                    .iter()
+                    .filter(|r| {
+                        lockfile_source.get(*r).map(|s| s.as_str())
+                            == Some(
+                                component_map
+                                    .get(lf_ref)
+                                    .and_then(|c| c.name.as_deref())
+                                    .unwrap_or(""),
+                            )
+                    })
+                    .cloned()
+                    .collect();
+                if lf_direct.len() == 1 {
+                    let sole = &lf_direct[0];
+                    if let Some(sole_deps) = dep_graph.get(sole)
+                        && !sole_deps.is_empty()
+                    {
+                        lockfile_refs.insert(sole.clone());
+                        new_root_deps.extend(sole_deps.clone());
+                        new_root_deps.retain(|r| r != sole);
+                        dep_graph.remove(sole);
+                    }
+                }
+            }
+
+            dep_graph.insert(root_ref.clone(), new_root_deps);
+        }
     }
 
     let root_direct: HashSet<String> = dep_graph
@@ -742,8 +1077,8 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .or_else(|| rc.purl.clone())
             .unwrap_or_default();
 
-        // Skip the root component itself — it's not a dependency.
-        if bom_ref == root_ref {
+        // Skip the root component and lock-file intermediaries.
+        if bom_ref == root_ref || lockfile_refs.contains(&bom_ref) {
             continue;
         }
 
@@ -763,11 +1098,13 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .unwrap_or("")
             .to_string();
 
-        // Extract source/lock file from evidence.identity[].concludedValue
+        // Extract source/lock file from evidence.identity[].concludedValue,
+        // falling back to the lock-file name detected from trivy intermediaries.
         let source_file = rc
             .evidence
             .as_ref()
             .and_then(|ev| ev.identity.iter().find_map(|id| id.concluded_value.clone()))
+            .or_else(|| lockfile_source.get(&bom_ref).cloned())
             .unwrap_or_default();
 
         // Latest version from ecosystem-specific properties
@@ -804,8 +1141,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             .and_then(|id| id.confidence);
 
         // Vulnerabilities
-        let vuln_ids = vuln_map.get(&bom_ref).cloned().unwrap_or_default();
-        let vuln_count = vuln_ids.len();
+        let vulns = vuln_map.get(&bom_ref).cloned().unwrap_or_default();
 
         if !dep_group.is_empty() {
             dev_refs.insert(bom_ref.clone());
@@ -830,8 +1166,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
                 hashes,
                 vcs_url,
                 confidence,
-                vuln_count,
-                vuln_ids,
+                vulns,
             },
         );
     }
@@ -901,6 +1236,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         tree_roots,
         metadata: sbom_metadata,
         json_root,
+        vulnerabilities,
         root_direct,
         dev_refs,
         all_child_refs,
@@ -1293,6 +1629,90 @@ mod tests {
             DepType::Required,
             "ratatui should be Required, got {:?}",
             ratatui.dep_type
+        );
+    }
+
+    #[test]
+    fn parse_trivy_bom() {
+        let sbom = parse_sbom(Path::new("trivy-bom.json")).expect("failed to parse trivy-bom.json");
+        assert!(!sbom.components.is_empty(), "should have components");
+
+        // Cargo.lock should NOT appear as a component (it's a lock-file intermediary)
+        assert!(
+            !sbom.components.values().any(|c| c.name == "Cargo.lock"),
+            "Cargo.lock should be filtered out as a lock-file intermediary"
+        );
+
+        // All remaining components should have source_file set to "Cargo.lock"
+        for comp in sbom.components.values() {
+            assert_eq!(
+                comp.source_file, "Cargo.lock",
+                "{} should have source_file='Cargo.lock', got '{}'",
+                comp.name, comp.source_file
+            );
+        }
+
+        // ratatui should be a direct (required) dependency (promoted from lock-file child)
+        let ratatui = sbom
+            .components
+            .values()
+            .find(|c| c.name == "ratatui")
+            .expect("ratatui not found in components");
+        assert!(
+            ratatui.is_direct,
+            "ratatui should be direct after lock-file promotion"
+        );
+    }
+
+    #[test]
+    fn parse_goof_vulns() {
+        let sbom = parse_sbom(Path::new("../goof.json")).expect("failed to parse ../goof.json");
+        assert!(
+            !sbom.vulnerabilities.is_empty(),
+            "goof.json should have vulnerabilities"
+        );
+
+        // Check that vulnerabilities are sorted by severity (critical first)
+        for w in sbom.vulnerabilities.windows(2) {
+            assert!(
+                w[0].severity >= w[1].severity,
+                "vulns should be sorted by severity descending: {} ({:?}) before {} ({:?})",
+                w[0].id,
+                w[0].severity,
+                w[1].id,
+                w[1].severity
+            );
+        }
+
+        // All vulns should have an ID
+        for v in &sbom.vulnerabilities {
+            assert!(!v.id.is_empty(), "vuln should have an ID");
+        }
+
+        // Check that affected_refs link to actual components
+        for v in &sbom.vulnerabilities {
+            for r in &v.affected_refs {
+                assert!(
+                    sbom.components.contains_key(r),
+                    "vuln {} references unknown component {}",
+                    v.id,
+                    r
+                );
+            }
+        }
+
+        // CVE-2014-3744 should be present with high severity
+        let cve = sbom
+            .vulnerabilities
+            .iter()
+            .find(|v| v.id == "CVE-2014-3744")
+            .expect("CVE-2014-3744 not found");
+        assert_eq!(cve.severity, VulnSeverity::High);
+        assert!(cve.cvss_score.is_some(), "should have a CVSS score");
+        assert!(!cve.description.is_empty(), "should have a description");
+        assert!(
+            !cve.recommendation.is_empty(),
+            "should have a recommendation"
         );
     }
 }
