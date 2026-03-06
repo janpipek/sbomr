@@ -6,6 +6,7 @@ mod ui;
 use std::io;
 use std::path::PathBuf;
 
+use clap::Parser;
 use color_eyre::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, MouseButton, MouseEventKind},
@@ -13,6 +14,25 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
+
+/// Interactive TUI viewer for CycloneDX SBOMs.
+#[derive(Parser, Debug)]
+#[command(version, about)]
+struct Cli {
+    /// Path to a CycloneDX SBOM JSON file.
+    #[arg(default_value = "bom.json")]
+    path: PathBuf,
+
+    /// Force a specific colour theme instead of auto-detecting.
+    #[arg(long, value_enum)]
+    theme: Option<CliTheme>,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum CliTheme {
+    Dark,
+    Light,
+}
 
 /// Restore the terminal to a sane state (raw mode off, alternate screen off,
 /// mouse capture off, cursor visible).  Called both on normal exit and from
@@ -38,28 +58,19 @@ fn main() -> Result<()> {
 
     color_eyre::install()?;
 
-    // Determine SBOM file path from args (default: bom.json)
-    let arg = std::env::args().nth(1);
-    if matches!(arg.as_deref(), Some("--help" | "-h")) {
-        println!("Usage: sbomr [path/to/bom.json]");
-        println!();
-        println!("Interactive TUI viewer for CycloneDX SBOMs.");
-        println!("If no path is given, looks for bom.json in the current directory.");
-        std::process::exit(0);
-    }
+    let cli = Cli::parse();
 
-    let sbom_path = arg
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("bom.json"));
-
-    if !sbom_path.exists() {
-        eprintln!("Error: SBOM file not found: {}", sbom_path.display());
-        eprintln!("Usage: sbomr [path/to/bom.json]");
+    if !cli.path.exists() {
+        eprintln!("Error: SBOM file not found: {}", cli.path.display());
         std::process::exit(1);
     }
 
-    let sbom_data = sbom::parse_sbom(&sbom_path)?;
-    let initial_theme = theme::detect_os_theme();
+    let sbom_data = sbom::parse_sbom(&cli.path)?;
+    let initial_theme = match cli.theme {
+        Some(CliTheme::Dark) => theme::Theme::Dark,
+        Some(CliTheme::Light) => theme::Theme::Light,
+        None => theme::detect_os_theme(),
+    };
     let mut app = app::App::new(sbom_data, initial_theme);
 
     // Setup terminal
