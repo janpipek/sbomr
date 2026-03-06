@@ -1630,6 +1630,72 @@ pub fn component_to_json_value(comp: &Component) -> serde_json::Value {
     })
 }
 
+// ---------------------------------------------------------------------------
+// CSV export
+// ---------------------------------------------------------------------------
+
+/// Escape a field for RFC 4180 CSV: if the value contains a comma, quote, or
+/// newline, wrap it in double-quotes and double any inner quotes.
+fn csv_escape(field: &str) -> String {
+    if field.contains(',') || field.contains('"') || field.contains('\n') {
+        let mut out = String::with_capacity(field.len() + 2);
+        out.push('"');
+        for ch in field.chars() {
+            if ch == '"' {
+                out.push('"');
+            }
+            out.push(ch);
+        }
+        out.push('"');
+        out
+    } else {
+        field.to_string()
+    }
+}
+
+/// Write the component table as CSV to `writer`.
+///
+/// The columns match the TUI table exactly:
+/// Name, Version, Registry, Type, License, Scope, Dep Type, Description
+pub fn write_csv(sbom: &SBOMData, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
+    writeln!(writer, "Name,Version,Registry,Type,License,Scope,Dep Type,Description")?;
+
+    for bom_ref in &sbom.sorted_components {
+        let comp = match sbom.components.get(bom_ref) {
+            Some(c) => c,
+            None => continue,
+        };
+
+        let registry = if comp.registry.is_empty() {
+            "-"
+        } else {
+            &comp.registry
+        };
+        let comp_type = if comp.comp_type.is_empty() {
+            "-"
+        } else {
+            &comp.comp_type
+        };
+        let license = comp.license_str();
+        let dep_type = comp.dep_type.label();
+
+        writeln!(
+            writer,
+            "{},{},{},{},{},{},{},{}",
+            csv_escape(&comp.name),
+            csv_escape(&comp.version),
+            csv_escape(registry),
+            csv_escape(comp_type),
+            csv_escape(&license),
+            csv_escape(&comp.scope),
+            csv_escape(&dep_type),
+            csv_escape(&comp.description),
+        )?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1796,7 +1862,7 @@ mod tests {
 
     #[test]
     fn parse_own_bom() {
-        let sbom = parse_sbom(Path::new("bom.json")).expect("failed to parse own bom.json");
+        let sbom = parse_sbom(Path::new("tests/fixtures/bom.json")).expect("failed to parse own bom.json");
         assert!(!sbom.root_name.is_empty(), "root name should not be empty");
         assert!(!sbom.components.is_empty(), "should have components");
         assert!(!sbom.tree_roots.is_empty(), "should have tree roots");
@@ -1827,7 +1893,7 @@ mod tests {
 
     #[test]
     fn parse_trivy_bom() {
-        let sbom = parse_sbom(Path::new("trivy-bom.json")).expect("failed to parse trivy-bom.json");
+        let sbom = parse_sbom(Path::new("tests/fixtures/trivy-bom.json")).expect("failed to parse trivy-bom.json");
         assert!(!sbom.components.is_empty(), "should have components");
 
         // Cargo.lock should NOT appear as a component (it's a lock-file intermediary)
@@ -1858,6 +1924,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires ../goof.json which is not checked into the repo"]
     fn parse_goof_vulns() {
         let sbom = parse_sbom(Path::new("../goof.json")).expect("failed to parse ../goof.json");
         assert!(

@@ -1,0 +1,2366 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:6dbf2a00-29f3-4fc7-9dcc-1b9de116bbca",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-03-05T08:13:37+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "manufacturer": {
+            "name": "Aqua Security Software Ltd."
+          },
+          "group": "aquasecurity",
+          "name": "trivy",
+          "version": "0.67.2"
+        }
+      ]
+    },
+    "component": {
+      "bom-ref": "026cce22-9644-4ff8-875e-ed0dd3a32b75",
+      "type": "application",
+      "name": ".",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:SchemaVersion",
+          "value": "2"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "6f721a37-d212-4289-85dd-6bd813d2f02f",
+      "type": "application",
+      "name": "Cargo.lock",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:Class",
+          "value": "lang-pkgs"
+        },
+        {
+          "name": "aquasecurity:trivy:Type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/addr2line@0.25.1",
+      "type": "library",
+      "name": "addr2line",
+      "version": "0.25.1",
+      "purl": "pkg:cargo/addr2line@0.25.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "addr2line@0.25.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/adler2@2.0.1",
+      "type": "library",
+      "name": "adler2",
+      "version": "2.0.1",
+      "purl": "pkg:cargo/adler2@2.0.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "adler2@2.0.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/allocator-api2@0.2.21",
+      "type": "library",
+      "name": "allocator-api2",
+      "version": "0.2.21",
+      "purl": "pkg:cargo/allocator-api2@0.2.21",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "allocator-api2@0.2.21"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/backtrace@0.3.76",
+      "type": "library",
+      "name": "backtrace",
+      "version": "0.3.76",
+      "purl": "pkg:cargo/backtrace@0.3.76",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "backtrace@0.3.76"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/bitflags@2.11.0",
+      "type": "library",
+      "name": "bitflags",
+      "version": "2.11.0",
+      "purl": "pkg:cargo/bitflags@2.11.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "bitflags@2.11.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/cassowary@0.3.0",
+      "type": "library",
+      "name": "cassowary",
+      "version": "0.3.0",
+      "purl": "pkg:cargo/cassowary@0.3.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "cassowary@0.3.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/castaway@0.2.4",
+      "type": "library",
+      "name": "castaway",
+      "version": "0.2.4",
+      "purl": "pkg:cargo/castaway@0.2.4",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "castaway@0.2.4"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/cfg-if@1.0.4",
+      "type": "library",
+      "name": "cfg-if",
+      "version": "1.0.4",
+      "purl": "pkg:cargo/cfg-if@1.0.4",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "cfg-if@1.0.4"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/color-eyre@0.6.5",
+      "type": "library",
+      "name": "color-eyre",
+      "version": "0.6.5",
+      "purl": "pkg:cargo/color-eyre@0.6.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "color-eyre@0.6.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/color-spantrace@0.3.0",
+      "type": "library",
+      "name": "color-spantrace",
+      "version": "0.3.0",
+      "purl": "pkg:cargo/color-spantrace@0.3.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "color-spantrace@0.3.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/compact_str@0.8.1",
+      "type": "library",
+      "name": "compact_str",
+      "version": "0.8.1",
+      "purl": "pkg:cargo/compact_str@0.8.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "compact_str@0.8.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/crossterm@0.28.1",
+      "type": "library",
+      "name": "crossterm",
+      "version": "0.28.1",
+      "purl": "pkg:cargo/crossterm@0.28.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "crossterm@0.28.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/crossterm_winapi@0.9.1",
+      "type": "library",
+      "name": "crossterm_winapi",
+      "version": "0.9.1",
+      "purl": "pkg:cargo/crossterm_winapi@0.9.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "crossterm_winapi@0.9.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/darling@0.23.0",
+      "type": "library",
+      "name": "darling",
+      "version": "0.23.0",
+      "purl": "pkg:cargo/darling@0.23.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "darling@0.23.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/darling_core@0.23.0",
+      "type": "library",
+      "name": "darling_core",
+      "version": "0.23.0",
+      "purl": "pkg:cargo/darling_core@0.23.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "darling_core@0.23.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/darling_macro@0.23.0",
+      "type": "library",
+      "name": "darling_macro",
+      "version": "0.23.0",
+      "purl": "pkg:cargo/darling_macro@0.23.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "darling_macro@0.23.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/either@1.15.0",
+      "type": "library",
+      "name": "either",
+      "version": "1.15.0",
+      "purl": "pkg:cargo/either@1.15.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "either@1.15.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/equivalent@1.0.2",
+      "type": "library",
+      "name": "equivalent",
+      "version": "1.0.2",
+      "purl": "pkg:cargo/equivalent@1.0.2",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "equivalent@1.0.2"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/errno@0.3.14",
+      "type": "library",
+      "name": "errno",
+      "version": "0.3.14",
+      "purl": "pkg:cargo/errno@0.3.14",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "errno@0.3.14"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/eyre@0.6.12",
+      "type": "library",
+      "name": "eyre",
+      "version": "0.6.12",
+      "purl": "pkg:cargo/eyre@0.6.12",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "eyre@0.6.12"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/foldhash@0.1.5",
+      "type": "library",
+      "name": "foldhash",
+      "version": "0.1.5",
+      "purl": "pkg:cargo/foldhash@0.1.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "foldhash@0.1.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/gimli@0.32.3",
+      "type": "library",
+      "name": "gimli",
+      "version": "0.32.3",
+      "purl": "pkg:cargo/gimli@0.32.3",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "gimli@0.32.3"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/hashbrown@0.15.5",
+      "type": "library",
+      "name": "hashbrown",
+      "version": "0.15.5",
+      "purl": "pkg:cargo/hashbrown@0.15.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "hashbrown@0.15.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/heck@0.5.0",
+      "type": "library",
+      "name": "heck",
+      "version": "0.5.0",
+      "purl": "pkg:cargo/heck@0.5.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "heck@0.5.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/ident_case@1.0.1",
+      "type": "library",
+      "name": "ident_case",
+      "version": "1.0.1",
+      "purl": "pkg:cargo/ident_case@1.0.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "ident_case@1.0.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/indenter@0.3.4",
+      "type": "library",
+      "name": "indenter",
+      "version": "0.3.4",
+      "purl": "pkg:cargo/indenter@0.3.4",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "indenter@0.3.4"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/indoc@2.0.7",
+      "type": "library",
+      "name": "indoc",
+      "version": "2.0.7",
+      "purl": "pkg:cargo/indoc@2.0.7",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "indoc@2.0.7"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/instability@0.3.11",
+      "type": "library",
+      "name": "instability",
+      "version": "0.3.11",
+      "purl": "pkg:cargo/instability@0.3.11",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "instability@0.3.11"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/itertools@0.13.0",
+      "type": "library",
+      "name": "itertools",
+      "version": "0.13.0",
+      "purl": "pkg:cargo/itertools@0.13.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "itertools@0.13.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/itoa@1.0.17",
+      "type": "library",
+      "name": "itoa",
+      "version": "1.0.17",
+      "purl": "pkg:cargo/itoa@1.0.17",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "itoa@1.0.17"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/lazy_static@1.5.0",
+      "type": "library",
+      "name": "lazy_static",
+      "version": "1.5.0",
+      "purl": "pkg:cargo/lazy_static@1.5.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "lazy_static@1.5.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/libc@0.2.182",
+      "type": "library",
+      "name": "libc",
+      "version": "0.2.182",
+      "purl": "pkg:cargo/libc@0.2.182",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "libc@0.2.182"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/linux-raw-sys@0.4.15",
+      "type": "library",
+      "name": "linux-raw-sys",
+      "version": "0.4.15",
+      "purl": "pkg:cargo/linux-raw-sys@0.4.15",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "linux-raw-sys@0.4.15"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/lock_api@0.4.14",
+      "type": "library",
+      "name": "lock_api",
+      "version": "0.4.14",
+      "purl": "pkg:cargo/lock_api@0.4.14",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "lock_api@0.4.14"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/log@0.4.29",
+      "type": "library",
+      "name": "log",
+      "version": "0.4.29",
+      "purl": "pkg:cargo/log@0.4.29",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "log@0.4.29"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/lru@0.12.5",
+      "type": "library",
+      "name": "lru",
+      "version": "0.12.5",
+      "purl": "pkg:cargo/lru@0.12.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "lru@0.12.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/memchr@2.8.0",
+      "type": "library",
+      "name": "memchr",
+      "version": "2.8.0",
+      "purl": "pkg:cargo/memchr@2.8.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "memchr@2.8.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/miniz_oxide@0.8.9",
+      "type": "library",
+      "name": "miniz_oxide",
+      "version": "0.8.9",
+      "purl": "pkg:cargo/miniz_oxide@0.8.9",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "miniz_oxide@0.8.9"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/mio@1.1.1",
+      "type": "library",
+      "name": "mio",
+      "version": "1.1.1",
+      "purl": "pkg:cargo/mio@1.1.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "mio@1.1.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/object@0.37.3",
+      "type": "library",
+      "name": "object",
+      "version": "0.37.3",
+      "purl": "pkg:cargo/object@0.37.3",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "object@0.37.3"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/once_cell@1.21.3",
+      "type": "library",
+      "name": "once_cell",
+      "version": "1.21.3",
+      "purl": "pkg:cargo/once_cell@1.21.3",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "once_cell@1.21.3"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/owo-colors@4.3.0",
+      "type": "library",
+      "name": "owo-colors",
+      "version": "4.3.0",
+      "purl": "pkg:cargo/owo-colors@4.3.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "owo-colors@4.3.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/parking_lot@0.12.5",
+      "type": "library",
+      "name": "parking_lot",
+      "version": "0.12.5",
+      "purl": "pkg:cargo/parking_lot@0.12.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "parking_lot@0.12.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/parking_lot_core@0.9.12",
+      "type": "library",
+      "name": "parking_lot_core",
+      "version": "0.9.12",
+      "purl": "pkg:cargo/parking_lot_core@0.9.12",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "parking_lot_core@0.9.12"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/paste@1.0.15",
+      "type": "library",
+      "name": "paste",
+      "version": "1.0.15",
+      "purl": "pkg:cargo/paste@1.0.15",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "paste@1.0.15"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/pin-project-lite@0.2.17",
+      "type": "library",
+      "name": "pin-project-lite",
+      "version": "0.2.17",
+      "purl": "pkg:cargo/pin-project-lite@0.2.17",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "pin-project-lite@0.2.17"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/proc-macro2@1.0.106",
+      "type": "library",
+      "name": "proc-macro2",
+      "version": "1.0.106",
+      "purl": "pkg:cargo/proc-macro2@1.0.106",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "proc-macro2@1.0.106"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/quote@1.0.45",
+      "type": "library",
+      "name": "quote",
+      "version": "1.0.45",
+      "purl": "pkg:cargo/quote@1.0.45",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "quote@1.0.45"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/ratatui@0.29.0",
+      "type": "library",
+      "name": "ratatui",
+      "version": "0.29.0",
+      "purl": "pkg:cargo/ratatui@0.29.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "ratatui@0.29.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/redox_syscall@0.5.18",
+      "type": "library",
+      "name": "redox_syscall",
+      "version": "0.5.18",
+      "purl": "pkg:cargo/redox_syscall@0.5.18",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "redox_syscall@0.5.18"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/rustc-demangle@0.1.27",
+      "type": "library",
+      "name": "rustc-demangle",
+      "version": "0.1.27",
+      "purl": "pkg:cargo/rustc-demangle@0.1.27",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "rustc-demangle@0.1.27"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/rustix@0.38.44",
+      "type": "library",
+      "name": "rustix",
+      "version": "0.38.44",
+      "purl": "pkg:cargo/rustix@0.38.44",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "rustix@0.38.44"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/rustversion@1.0.22",
+      "type": "library",
+      "name": "rustversion",
+      "version": "1.0.22",
+      "purl": "pkg:cargo/rustversion@1.0.22",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "rustversion@1.0.22"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/ryu@1.0.23",
+      "type": "library",
+      "name": "ryu",
+      "version": "1.0.23",
+      "purl": "pkg:cargo/ryu@1.0.23",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "ryu@1.0.23"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/sbomr@0.1.0",
+      "type": "library",
+      "name": "sbomr",
+      "version": "0.1.0",
+      "purl": "pkg:cargo/sbomr@0.1.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "sbomr@0.1.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/scopeguard@1.2.0",
+      "type": "library",
+      "name": "scopeguard",
+      "version": "1.2.0",
+      "purl": "pkg:cargo/scopeguard@1.2.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "scopeguard@1.2.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/serde@1.0.228",
+      "type": "library",
+      "name": "serde",
+      "version": "1.0.228",
+      "purl": "pkg:cargo/serde@1.0.228",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "serde@1.0.228"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/serde_core@1.0.228",
+      "type": "library",
+      "name": "serde_core",
+      "version": "1.0.228",
+      "purl": "pkg:cargo/serde_core@1.0.228",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "serde_core@1.0.228"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/serde_derive@1.0.228",
+      "type": "library",
+      "name": "serde_derive",
+      "version": "1.0.228",
+      "purl": "pkg:cargo/serde_derive@1.0.228",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "serde_derive@1.0.228"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/serde_json@1.0.149",
+      "type": "library",
+      "name": "serde_json",
+      "version": "1.0.149",
+      "purl": "pkg:cargo/serde_json@1.0.149",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "serde_json@1.0.149"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/sharded-slab@0.1.7",
+      "type": "library",
+      "name": "sharded-slab",
+      "version": "0.1.7",
+      "purl": "pkg:cargo/sharded-slab@0.1.7",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "sharded-slab@0.1.7"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/signal-hook-mio@0.2.5",
+      "type": "library",
+      "name": "signal-hook-mio",
+      "version": "0.2.5",
+      "purl": "pkg:cargo/signal-hook-mio@0.2.5",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "signal-hook-mio@0.2.5"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/signal-hook-registry@1.4.8",
+      "type": "library",
+      "name": "signal-hook-registry",
+      "version": "1.4.8",
+      "purl": "pkg:cargo/signal-hook-registry@1.4.8",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "signal-hook-registry@1.4.8"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/signal-hook@0.3.18",
+      "type": "library",
+      "name": "signal-hook",
+      "version": "0.3.18",
+      "purl": "pkg:cargo/signal-hook@0.3.18",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "signal-hook@0.3.18"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/smallvec@1.15.1",
+      "type": "library",
+      "name": "smallvec",
+      "version": "1.15.1",
+      "purl": "pkg:cargo/smallvec@1.15.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "smallvec@1.15.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/static_assertions@1.1.0",
+      "type": "library",
+      "name": "static_assertions",
+      "version": "1.1.0",
+      "purl": "pkg:cargo/static_assertions@1.1.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "static_assertions@1.1.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/strsim@0.11.1",
+      "type": "library",
+      "name": "strsim",
+      "version": "0.11.1",
+      "purl": "pkg:cargo/strsim@0.11.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "strsim@0.11.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/strum@0.26.3",
+      "type": "library",
+      "name": "strum",
+      "version": "0.26.3",
+      "purl": "pkg:cargo/strum@0.26.3",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "strum@0.26.3"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/strum_macros@0.26.4",
+      "type": "library",
+      "name": "strum_macros",
+      "version": "0.26.4",
+      "purl": "pkg:cargo/strum_macros@0.26.4",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "strum_macros@0.26.4"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/syn@2.0.117",
+      "type": "library",
+      "name": "syn",
+      "version": "2.0.117",
+      "purl": "pkg:cargo/syn@2.0.117",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "syn@2.0.117"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/thread_local@1.1.9",
+      "type": "library",
+      "name": "thread_local",
+      "version": "1.1.9",
+      "purl": "pkg:cargo/thread_local@1.1.9",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "thread_local@1.1.9"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/tracing-core@0.1.36",
+      "type": "library",
+      "name": "tracing-core",
+      "version": "0.1.36",
+      "purl": "pkg:cargo/tracing-core@0.1.36",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "tracing-core@0.1.36"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/tracing-error@0.2.1",
+      "type": "library",
+      "name": "tracing-error",
+      "version": "0.2.1",
+      "purl": "pkg:cargo/tracing-error@0.2.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "tracing-error@0.2.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/tracing-subscriber@0.3.22",
+      "type": "library",
+      "name": "tracing-subscriber",
+      "version": "0.3.22",
+      "purl": "pkg:cargo/tracing-subscriber@0.3.22",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "tracing-subscriber@0.3.22"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/tracing@0.1.44",
+      "type": "library",
+      "name": "tracing",
+      "version": "0.1.44",
+      "purl": "pkg:cargo/tracing@0.1.44",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "tracing@0.1.44"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/unicode-ident@1.0.24",
+      "type": "library",
+      "name": "unicode-ident",
+      "version": "1.0.24",
+      "purl": "pkg:cargo/unicode-ident@1.0.24",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "unicode-ident@1.0.24"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/unicode-segmentation@1.12.0",
+      "type": "library",
+      "name": "unicode-segmentation",
+      "version": "1.12.0",
+      "purl": "pkg:cargo/unicode-segmentation@1.12.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "unicode-segmentation@1.12.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/unicode-truncate@1.1.0",
+      "type": "library",
+      "name": "unicode-truncate",
+      "version": "1.1.0",
+      "purl": "pkg:cargo/unicode-truncate@1.1.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "unicode-truncate@1.1.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/unicode-width@0.1.14",
+      "type": "library",
+      "name": "unicode-width",
+      "version": "0.1.14",
+      "purl": "pkg:cargo/unicode-width@0.1.14",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "unicode-width@0.1.14"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/unicode-width@0.2.0",
+      "type": "library",
+      "name": "unicode-width",
+      "version": "0.2.0",
+      "purl": "pkg:cargo/unicode-width@0.2.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "unicode-width@0.2.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/valuable@0.1.1",
+      "type": "library",
+      "name": "valuable",
+      "version": "0.1.1",
+      "purl": "pkg:cargo/valuable@0.1.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "valuable@0.1.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/wasi@0.11.1%2Bwasi-snapshot-preview1",
+      "type": "library",
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1",
+      "purl": "pkg:cargo/wasi@0.11.1%2Bwasi-snapshot-preview1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "wasi@0.11.1+wasi-snapshot-preview1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0",
+      "type": "library",
+      "name": "winapi-i686-pc-windows-gnu",
+      "version": "0.4.0",
+      "purl": "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "winapi-i686-pc-windows-gnu@0.4.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0",
+      "type": "library",
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "version": "0.4.0",
+      "purl": "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "winapi-x86_64-pc-windows-gnu@0.4.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/winapi@0.3.9",
+      "type": "library",
+      "name": "winapi",
+      "version": "0.3.9",
+      "purl": "pkg:cargo/winapi@0.3.9",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "winapi@0.3.9"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows-link@0.2.1",
+      "type": "library",
+      "name": "windows-link",
+      "version": "0.2.1",
+      "purl": "pkg:cargo/windows-link@0.2.1",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows-link@0.2.1"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows-sys@0.59.0",
+      "type": "library",
+      "name": "windows-sys",
+      "version": "0.59.0",
+      "purl": "pkg:cargo/windows-sys@0.59.0",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows-sys@0.59.0"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows-sys@0.61.2",
+      "type": "library",
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "purl": "pkg:cargo/windows-sys@0.61.2",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows-sys@0.61.2"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows-targets@0.52.6",
+      "type": "library",
+      "name": "windows-targets",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows-targets@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows-targets@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "type": "library",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_aarch64_gnullvm@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "type": "library",
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_aarch64_msvc@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "type": "library",
+      "name": "windows_i686_gnu",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_i686_gnu@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "type": "library",
+      "name": "windows_i686_gnullvm",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_i686_gnullvm@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "type": "library",
+      "name": "windows_i686_msvc",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_i686_msvc@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "type": "library",
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_x86_64_gnu@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "type": "library",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_x86_64_gnullvm@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "type": "library",
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.6",
+      "purl": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "windows_x86_64_msvc@0.52.6"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:cargo/zmij@1.0.21",
+      "type": "library",
+      "name": "zmij",
+      "version": "1.0.21",
+      "purl": "pkg:cargo/zmij@1.0.21",
+      "properties": [
+        {
+          "name": "aquasecurity:trivy:PkgID",
+          "value": "zmij@1.0.21"
+        },
+        {
+          "name": "aquasecurity:trivy:PkgType",
+          "value": "cargo"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "026cce22-9644-4ff8-875e-ed0dd3a32b75",
+      "dependsOn": [
+        "6f721a37-d212-4289-85dd-6bd813d2f02f"
+      ]
+    },
+    {
+      "ref": "6f721a37-d212-4289-85dd-6bd813d2f02f",
+      "dependsOn": [
+        "pkg:cargo/sbomr@0.1.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/addr2line@0.25.1",
+      "dependsOn": [
+        "pkg:cargo/gimli@0.32.3"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/adler2@2.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/allocator-api2@0.2.21",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/backtrace@0.3.76",
+      "dependsOn": [
+        "pkg:cargo/addr2line@0.25.1",
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/miniz_oxide@0.8.9",
+        "pkg:cargo/object@0.37.3",
+        "pkg:cargo/rustc-demangle@0.1.27",
+        "pkg:cargo/windows-link@0.2.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/bitflags@2.11.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/cassowary@0.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/castaway@0.2.4",
+      "dependsOn": [
+        "pkg:cargo/rustversion@1.0.22"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/cfg-if@1.0.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/color-eyre@0.6.5",
+      "dependsOn": [
+        "pkg:cargo/backtrace@0.3.76",
+        "pkg:cargo/color-spantrace@0.3.0",
+        "pkg:cargo/eyre@0.6.12",
+        "pkg:cargo/indenter@0.3.4",
+        "pkg:cargo/once_cell@1.21.3",
+        "pkg:cargo/owo-colors@4.3.0",
+        "pkg:cargo/tracing-error@0.2.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/color-spantrace@0.3.0",
+      "dependsOn": [
+        "pkg:cargo/once_cell@1.21.3",
+        "pkg:cargo/owo-colors@4.3.0",
+        "pkg:cargo/tracing-core@0.1.36",
+        "pkg:cargo/tracing-error@0.2.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/compact_str@0.8.1",
+      "dependsOn": [
+        "pkg:cargo/castaway@0.2.4",
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/itoa@1.0.17",
+        "pkg:cargo/rustversion@1.0.22",
+        "pkg:cargo/ryu@1.0.23",
+        "pkg:cargo/static_assertions@1.1.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/crossterm@0.28.1",
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.11.0",
+        "pkg:cargo/crossterm_winapi@0.9.1",
+        "pkg:cargo/mio@1.1.1",
+        "pkg:cargo/parking_lot@0.12.5",
+        "pkg:cargo/rustix@0.38.44",
+        "pkg:cargo/signal-hook-mio@0.2.5",
+        "pkg:cargo/signal-hook@0.3.18",
+        "pkg:cargo/winapi@0.3.9"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/crossterm_winapi@0.9.1",
+      "dependsOn": [
+        "pkg:cargo/winapi@0.3.9"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/darling@0.23.0",
+      "dependsOn": [
+        "pkg:cargo/darling_core@0.23.0",
+        "pkg:cargo/darling_macro@0.23.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/darling_core@0.23.0",
+      "dependsOn": [
+        "pkg:cargo/ident_case@1.0.1",
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/strsim@0.11.1",
+        "pkg:cargo/syn@2.0.117"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/darling_macro@0.23.0",
+      "dependsOn": [
+        "pkg:cargo/darling_core@0.23.0",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/either@1.15.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/equivalent@1.0.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/errno@0.3.14",
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/windows-sys@0.61.2"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/eyre@0.6.12",
+      "dependsOn": [
+        "pkg:cargo/indenter@0.3.4",
+        "pkg:cargo/once_cell@1.21.3"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/foldhash@0.1.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/gimli@0.32.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/hashbrown@0.15.5",
+      "dependsOn": [
+        "pkg:cargo/allocator-api2@0.2.21",
+        "pkg:cargo/equivalent@1.0.2",
+        "pkg:cargo/foldhash@0.1.5"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/heck@0.5.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/ident_case@1.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/indenter@0.3.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/indoc@2.0.7",
+      "dependsOn": [
+        "pkg:cargo/rustversion@1.0.22"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/instability@0.3.11",
+      "dependsOn": [
+        "pkg:cargo/darling@0.23.0",
+        "pkg:cargo/indoc@2.0.7",
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/itertools@0.13.0",
+      "dependsOn": [
+        "pkg:cargo/either@1.15.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/itoa@1.0.17",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/lazy_static@1.5.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/libc@0.2.182",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/linux-raw-sys@0.4.15",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/lock_api@0.4.14",
+      "dependsOn": [
+        "pkg:cargo/scopeguard@1.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/log@0.4.29",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/lru@0.12.5",
+      "dependsOn": [
+        "pkg:cargo/hashbrown@0.15.5"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/memchr@2.8.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/miniz_oxide@0.8.9",
+      "dependsOn": [
+        "pkg:cargo/adler2@2.0.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/mio@1.1.1",
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/wasi@0.11.1%2Bwasi-snapshot-preview1",
+        "pkg:cargo/windows-sys@0.61.2"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/object@0.37.3",
+      "dependsOn": [
+        "pkg:cargo/memchr@2.8.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/once_cell@1.21.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/owo-colors@4.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/parking_lot@0.12.5",
+      "dependsOn": [
+        "pkg:cargo/lock_api@0.4.14",
+        "pkg:cargo/parking_lot_core@0.9.12"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/parking_lot_core@0.9.12",
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/redox_syscall@0.5.18",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/windows-link@0.2.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/paste@1.0.15",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/pin-project-lite@0.2.17",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/proc-macro2@1.0.106",
+      "dependsOn": [
+        "pkg:cargo/unicode-ident@1.0.24"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/quote@1.0.45",
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/ratatui@0.29.0",
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.11.0",
+        "pkg:cargo/cassowary@0.3.0",
+        "pkg:cargo/compact_str@0.8.1",
+        "pkg:cargo/crossterm@0.28.1",
+        "pkg:cargo/indoc@2.0.7",
+        "pkg:cargo/instability@0.3.11",
+        "pkg:cargo/itertools@0.13.0",
+        "pkg:cargo/lru@0.12.5",
+        "pkg:cargo/paste@1.0.15",
+        "pkg:cargo/strum@0.26.3",
+        "pkg:cargo/unicode-segmentation@1.12.0",
+        "pkg:cargo/unicode-truncate@1.1.0",
+        "pkg:cargo/unicode-width@0.2.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/redox_syscall@0.5.18",
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.11.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/rustc-demangle@0.1.27",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/rustix@0.38.44",
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.11.0",
+        "pkg:cargo/errno@0.3.14",
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/linux-raw-sys@0.4.15",
+        "pkg:cargo/windows-sys@0.59.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/rustversion@1.0.22",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/ryu@1.0.23",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/sbomr@0.1.0",
+      "dependsOn": [
+        "pkg:cargo/color-eyre@0.6.5",
+        "pkg:cargo/crossterm@0.28.1",
+        "pkg:cargo/ratatui@0.29.0",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.149"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/scopeguard@1.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/serde@1.0.228",
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_derive@1.0.228"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/serde_core@1.0.228",
+      "dependsOn": [
+        "pkg:cargo/serde_derive@1.0.228"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/serde_derive@1.0.228",
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/serde_json@1.0.149",
+      "dependsOn": [
+        "pkg:cargo/itoa@1.0.17",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/zmij@1.0.21"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/sharded-slab@0.1.7",
+      "dependsOn": [
+        "pkg:cargo/lazy_static@1.5.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/signal-hook-mio@0.2.5",
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/mio@1.1.1",
+        "pkg:cargo/signal-hook@0.3.18"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/signal-hook-registry@1.4.8",
+      "dependsOn": [
+        "pkg:cargo/errno@0.3.14",
+        "pkg:cargo/libc@0.2.182"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/signal-hook@0.3.18",
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.182",
+        "pkg:cargo/signal-hook-registry@1.4.8"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/smallvec@1.15.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/static_assertions@1.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/strsim@0.11.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/strum@0.26.3",
+      "dependsOn": [
+        "pkg:cargo/strum_macros@0.26.4"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/strum_macros@0.26.4",
+      "dependsOn": [
+        "pkg:cargo/heck@0.5.0",
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/rustversion@1.0.22",
+        "pkg:cargo/syn@2.0.117"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/syn@2.0.117",
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/unicode-ident@1.0.24"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/thread_local@1.1.9",
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/tracing-core@0.1.36",
+      "dependsOn": [
+        "pkg:cargo/once_cell@1.21.3",
+        "pkg:cargo/valuable@0.1.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/tracing-error@0.2.1",
+      "dependsOn": [
+        "pkg:cargo/tracing-subscriber@0.3.22",
+        "pkg:cargo/tracing@0.1.44"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/tracing-subscriber@0.3.22",
+      "dependsOn": [
+        "pkg:cargo/sharded-slab@0.1.7",
+        "pkg:cargo/thread_local@1.1.9",
+        "pkg:cargo/tracing-core@0.1.36"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/tracing@0.1.44",
+      "dependsOn": [
+        "pkg:cargo/pin-project-lite@0.2.17",
+        "pkg:cargo/tracing-core@0.1.36"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/unicode-ident@1.0.24",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/unicode-segmentation@1.12.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/unicode-truncate@1.1.0",
+      "dependsOn": [
+        "pkg:cargo/itertools@0.13.0",
+        "pkg:cargo/unicode-segmentation@1.12.0",
+        "pkg:cargo/unicode-width@0.1.14"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/unicode-width@0.1.14",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/unicode-width@0.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/valuable@0.1.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/wasi@0.11.1%2Bwasi-snapshot-preview1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/winapi@0.3.9",
+      "dependsOn": [
+        "pkg:cargo/winapi-i686-pc-windows-gnu@0.4.0",
+        "pkg:cargo/winapi-x86_64-pc-windows-gnu@0.4.0"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/windows-link@0.2.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows-sys@0.59.0",
+      "dependsOn": [
+        "pkg:cargo/windows-targets@0.52.6"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/windows-sys@0.61.2",
+      "dependsOn": [
+        "pkg:cargo/windows-link@0.2.1"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/windows-targets@0.52.6",
+      "dependsOn": [
+        "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+        "pkg:cargo/windows_aarch64_msvc@0.52.6",
+        "pkg:cargo/windows_i686_gnu@0.52.6",
+        "pkg:cargo/windows_i686_gnullvm@0.52.6",
+        "pkg:cargo/windows_i686_msvc@0.52.6",
+        "pkg:cargo/windows_x86_64_gnu@0.52.6",
+        "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+        "pkg:cargo/windows_x86_64_msvc@0.52.6"
+      ]
+    },
+    {
+      "ref": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:cargo/zmij@1.0.21",
+      "dependsOn": []
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "GHSA-rhfx-m35p-ff5j",
+      "source": {
+        "name": "ghsa",
+        "url": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Arust"
+      },
+      "ratings": [],
+      "description": "Affected versions of this crate contain a soundness issue in the `IterMut` iterator implementation. The `IterMut::next` and `IterMut::next_back` methods temporarily create an exclusive reference to the key when dereferencing the internal node pointer.\n\nThis invalidates the shared pointer held by the internal `HashMap`, violating Stacked Borrows rules.",
+      "recommendation": "Upgrade lru to version 0.16.3",
+      "advisories": [
+        {
+          "url": "https://github.com/advisories/GHSA-rhfx-m35p-ff5j"
+        },
+        {
+          "url": "https://github.com/jeromefroe/lru-rs"
+        },
+        {
+          "url": "https://github.com/jeromefroe/lru-rs/pull/224"
+        },
+        {
+          "url": "https://rustsec.org/advisories/RUSTSEC-2026-0002.html"
+        }
+      ],
+      "published": "2026-01-07T20:38:57+00:00",
+      "updated": "2026-01-07T20:38:57+00:00",
+      "affects": [
+        {
+          "ref": "pkg:cargo/lru@0.12.5",
+          "versions": [
+            {
+              "version": "0.12.5",
+              "status": "affected"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

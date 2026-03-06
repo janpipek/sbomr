@@ -1,8 +1,3 @@
-mod app;
-mod sbom;
-mod theme;
-mod ui;
-
 use std::io;
 use std::path::PathBuf;
 
@@ -14,6 +9,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
+use sbomr::{app, sbom, theme, ui};
 
 /// Interactive TUI viewer for CycloneDX SBOMs.
 #[derive(Parser, Debug)]
@@ -26,6 +22,10 @@ struct Cli {
     /// Force a specific colour theme instead of auto-detecting.
     #[arg(long, value_enum)]
     theme: Option<CliTheme>,
+
+    /// Export the component table as CSV to the given path and exit.
+    #[arg(long)]
+    csv: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -66,6 +66,14 @@ fn main() -> Result<()> {
     }
 
     let sbom_data = sbom::parse_sbom(&cli.path)?;
+
+    // --csv: write CSV and exit without launching the TUI.
+    if let Some(csv_path) = cli.csv {
+        let mut file = std::fs::File::create(&csv_path)?;
+        sbom::write_csv(&sbom_data, &mut file)?;
+        return Ok(());
+    }
+
     let initial_theme = match cli.theme {
         Some(CliTheme::Dark) => theme::Theme::Dark,
         Some(CliTheme::Light) => theme::Theme::Light,
