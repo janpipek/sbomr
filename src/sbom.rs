@@ -1216,6 +1216,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         for comp in components.values_mut() {
             match &comp.dep_type {
                 DepType::Required => comp.scope = "required".into(),
+                DepType::Optional => comp.scope = "optional".into(),
                 DepType::Transitive => comp.scope = "unknown".into(),
                 _ => {}
             }
@@ -1601,6 +1602,32 @@ fn build_subtree(
         children,
         depth,
     }
+}
+
+/// Serialize a Component's fields to a `serde_json::Value` for the component JSON viewer.
+pub fn component_to_json_value(comp: &Component) -> serde_json::Value {
+    serde_json::json!({
+        "name": comp.name,
+        "version": comp.version,
+        "bom-ref": comp.bom_ref,
+        "purl": comp.purl,
+        "type": comp.comp_type,
+        "scope": comp.scope,
+        "dep_type": comp.dep_type.label(),
+        "registry": comp.registry,
+        "licenses": comp.licenses,
+        "description": comp.description,
+        "source_file": comp.source_file,
+        "latest_version": comp.latest_version,
+        "vcs_url": comp.vcs_url,
+        "hashes": comp.hashes.iter()
+            .map(|(alg, content)| serde_json::json!({"alg": alg, "content": content}))
+            .collect::<Vec<_>>(),
+        "vulnerabilities": comp.vulns.iter()
+            .map(|v| serde_json::json!({"id": v.id, "severity": v.severity.label()}))
+            .collect::<Vec<_>>(),
+        "confidence": comp.confidence,
+    })
 }
 
 #[cfg(test)]

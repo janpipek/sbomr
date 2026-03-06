@@ -59,12 +59,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         draw_filter_bar(frame, app, filter_area, &c);
     }
 
-    match app.active_tab {
-        Tab::Table => draw_table(frame, app, main_area, &c),
-        Tab::Tree => draw_tree(frame, app, main_area, &c),
-        Tab::Vulns => draw_vulns(frame, app, main_area, &c),
-        Tab::Metadata => draw_metadata(frame, app, main_area, &c),
-        Tab::Json => draw_json(frame, app, main_area, &c),
+    if app.comp_json_active {
+        draw_comp_json(frame, app, main_area, &c);
+    } else {
+        match app.active_tab {
+            Tab::Table => draw_table(frame, app, main_area, &c),
+            Tab::Tree => draw_tree(frame, app, main_area, &c),
+            Tab::Vulns => draw_vulns(frame, app, main_area, &c),
+            Tab::Metadata => draw_metadata(frame, app, main_area, &c),
+            Tab::Json => draw_json(frame, app, main_area, &c),
+        }
     }
 
     if detail_height > 0 {
@@ -1124,6 +1128,71 @@ fn draw_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 }
 
 // ---------------------------------------------------------------------------
+// Component JSON overlay
+// ---------------------------------------------------------------------------
+
+fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    let visible_height = area.height.saturating_sub(2) as usize;
+    app.adjust_comp_json_scroll(visible_height);
+
+    let start = app.comp_json_scroll;
+    let end = (start + visible_height).min(app.comp_json_len());
+
+    let lines: Vec<Line> = app.comp_json_flat[start..end]
+        .iter()
+        .enumerate()
+        .map(|(vi, line)| {
+            let is_selected = start + vi == app.comp_json_selected;
+            let result = Line::from(render_json_line(line, c));
+            if is_selected {
+                result.style(
+                    Style::default()
+                        .bg(c.bg_highlight)
+                        .fg(c.text_bright)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                result
+            }
+        })
+        .collect();
+
+    // Derive component name for the title from selected bom_ref
+    let comp_name = app
+        .selected_bom_ref()
+        .and_then(|r| app.sbom.components.get(r))
+        .map(|c| c.name.as_str())
+        .unwrap_or("Component");
+
+    let first = start + 1;
+    let last = end;
+    let total = app.comp_json_len();
+    let title = format!(" {comp_name}  lines {first}-{last} / {total}  Esc to close ");
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(c.border_active))
+            .title(title)
+            .title_style(Style::default().fg(c.accent).bold()),
+    );
+    frame.render_widget(paragraph, area);
+
+    if app.comp_json_len() > visible_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(app.comp_json_len()).position(app.comp_json_scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
+            area,
+            &mut scrollbar_state,
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Detail panel
 // ---------------------------------------------------------------------------
 
@@ -1442,6 +1511,12 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         Span::styled(" t ", key_style),
         Span::styled(" Dark/Light  ", sep),
     ];
+    if app.active_tab == Tab::Table || app.active_tab == Tab::Tree {
+        spans.extend([
+            Span::styled(" v ", key_style),
+            Span::styled(" View JSON  ", sep),
+        ]);
+    }
     if app.active_tab == Tab::Table {
         spans.extend([
             Span::styled(" s ", key_style),

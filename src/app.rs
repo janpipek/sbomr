@@ -282,6 +282,13 @@ pub struct App {
     pub json_selected: usize,
     pub json_scroll_offset: usize,
 
+    // Component JSON overlay
+    pub comp_json_active: bool,
+    pub comp_json_root: JsonNode,
+    pub comp_json_flat: Vec<FlatJsonLine>,
+    pub comp_json_selected: usize,
+    pub comp_json_scroll: usize,
+
     /// Areas saved after each draw for mouse click handling.
     pub click_areas: ClickAreas,
 
@@ -321,6 +328,17 @@ impl App {
             flat_json,
             json_selected: 0,
             json_scroll_offset: 0,
+            comp_json_active: false,
+            comp_json_root: JsonNode {
+                key: None,
+                kind: JsonNodeKind::Object,
+                children: vec![],
+                expanded: true,
+                child_count: 0,
+            },
+            comp_json_flat: vec![],
+            comp_json_selected: 0,
+            comp_json_scroll: 0,
             click_areas: ClickAreas::default(),
             should_quit: false,
         };
@@ -844,6 +862,145 @@ impl App {
         self.flat_json = flatten_json(&self.json_root);
         if self.json_selected >= self.flat_json.len() {
             self.json_selected = self.flat_json.len().saturating_sub(1);
+        }
+    }
+
+    // -- Component JSON overlay --------------------------------------------
+
+    pub fn comp_json_len(&self) -> usize {
+        self.comp_json_flat.len()
+    }
+
+    pub fn open_comp_json(&mut self) {
+        let bom_ref = match self.selected_bom_ref() {
+            Some(r) => r.to_string(),
+            None => return,
+        };
+        let comp = match self.sbom.components.get(&bom_ref) {
+            Some(c) => c,
+            None => return,
+        };
+        let value = crate::sbom::component_to_json_value(comp);
+        self.comp_json_root = crate::sbom::build_json_tree(&value);
+        self.comp_json_flat = flatten_json(&self.comp_json_root);
+        self.comp_json_selected = 0;
+        self.comp_json_scroll = 0;
+        self.comp_json_active = true;
+    }
+
+    pub fn close_comp_json(&mut self) {
+        self.comp_json_active = false;
+    }
+
+    pub fn adjust_comp_json_scroll(&mut self, viewport_height: usize) {
+        if self.comp_json_selected < self.comp_json_scroll {
+            self.comp_json_scroll = self.comp_json_selected;
+        } else if self.comp_json_selected >= self.comp_json_scroll + viewport_height {
+            self.comp_json_scroll = self.comp_json_selected - viewport_height + 1;
+        }
+    }
+
+    pub fn comp_json_move_up(&mut self) {
+        if self.comp_json_selected > 0 {
+            self.comp_json_selected -= 1;
+        }
+    }
+
+    pub fn comp_json_move_down(&mut self) {
+        if self.comp_json_selected + 1 < self.comp_json_len() {
+            self.comp_json_selected += 1;
+        }
+    }
+
+    pub fn comp_json_page_up(&mut self, page_size: usize) {
+        self.comp_json_selected = self.comp_json_selected.saturating_sub(page_size);
+    }
+
+    pub fn comp_json_page_down(&mut self, page_size: usize) {
+        let max = self.comp_json_len().saturating_sub(1);
+        self.comp_json_selected = (self.comp_json_selected + page_size).min(max);
+    }
+
+    pub fn comp_json_home(&mut self) {
+        self.comp_json_selected = 0;
+    }
+
+    pub fn comp_json_end(&mut self) {
+        self.comp_json_selected = self.comp_json_len().saturating_sub(1);
+    }
+
+    pub fn toggle_comp_json_selected(&mut self) {
+        if let Some(line) = self.comp_json_flat.get(self.comp_json_selected) {
+            if !line.collapsible {
+                return;
+            }
+            let path = line.path.clone();
+            if let Some(node) = Self::json_node_at_path_mut(&mut self.comp_json_root, &path) {
+                node.expanded = !node.expanded;
+            }
+            self.rebuild_comp_json_flat();
+        }
+    }
+
+    pub fn expand_comp_json_selected(&mut self) {
+        if let Some(line) = self.comp_json_flat.get(self.comp_json_selected) {
+            if !line.collapsible || line.expanded {
+                return;
+            }
+            let path = line.path.clone();
+            if let Some(node) = Self::json_node_at_path_mut(&mut self.comp_json_root, &path) {
+                node.expanded = true;
+            }
+            self.rebuild_comp_json_flat();
+        }
+    }
+
+    pub fn collapse_comp_json_selected(&mut self) {
+        if let Some(line) = self.comp_json_flat.get(self.comp_json_selected) {
+            if line.collapsible && line.expanded {
+                let path = line.path.clone();
+                if let Some(node) =
+                    Self::json_node_at_path_mut(&mut self.comp_json_root, &path)
+                {
+                    node.expanded = false;
+                }
+                self.rebuild_comp_json_flat();
+                return;
+            }
+            if !line.path.is_empty() {
+                let parent_path = line.path[..line.path.len() - 1].to_vec();
+                if let Some(node) =
+                    Self::json_node_at_path_mut(&mut self.comp_json_root, &parent_path)
+                    && matches!(node.kind, JsonNodeKind::Object | JsonNodeKind::Array)
+                {
+                    node.expanded = false;
+                }
+                self.rebuild_comp_json_flat();
+                if let Some(idx) = self.comp_json_flat.iter().position(|l| l.path == parent_path)
+                {
+                    self.comp_json_selected = idx;
+                }
+            }
+        }
+    }
+
+    pub fn expand_all_comp_json(&mut self) {
+        Self::set_json_expanded_recursive(&mut self.comp_json_root, true);
+        self.rebuild_comp_json_flat();
+    }
+
+    pub fn collapse_all_comp_json(&mut self) {
+        Self::set_json_expanded_recursive(&mut self.comp_json_root, false);
+        self.rebuild_comp_json_flat();
+        self.comp_json_selected = self
+            .comp_json_selected
+            .min(self.comp_json_len().saturating_sub(1));
+    }
+
+    fn rebuild_comp_json_flat(&mut self) {
+        self.comp_json_flat = flatten_json(&self.comp_json_root);
+        if self.comp_json_selected >= self.comp_json_flat.len() {
+            self.comp_json_selected = self.comp_json_flat.len().saturating_sub(1);
         }
     }
 

@@ -228,6 +228,35 @@ fn run_loop(
                     continue;
                 }
 
+                // Component JSON overlay captures most keys when active
+                if app.comp_json_active {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('v') => {
+                            app.close_comp_json()
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => app.comp_json_move_up(),
+                        KeyCode::Down | KeyCode::Char('j') => app.comp_json_move_down(),
+                        KeyCode::PageUp => app.comp_json_page_up(10),
+                        KeyCode::PageDown => app.comp_json_page_down(10),
+                        KeyCode::Home | KeyCode::Char('g') => app.comp_json_home(),
+                        KeyCode::End | KeyCode::Char('G') => app.comp_json_end(),
+                        KeyCode::Enter | KeyCode::Char(' ') => {
+                            app.toggle_comp_json_selected()
+                        }
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            app.expand_comp_json_selected()
+                        }
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            app.collapse_comp_json_selected()
+                        }
+                        KeyCode::Char('e') => app.expand_all_comp_json(),
+                        KeyCode::Char('c') => app.collapse_all_comp_json(),
+                        KeyCode::Char('t') => app.toggle_theme(),
+                        _ => {}
+                    }
+                    continue;
+                }
+
                 // Normal mode
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => {
@@ -307,6 +336,10 @@ fn run_loop(
                     // Toggle light/dark theme
                     KeyCode::Char('t') => {
                         app.toggle_theme();
+                    }
+                    // Open component JSON viewer
+                    KeyCode::Char('v') => {
+                        app.open_comp_json();
                     }
                     // Open URL in browser (registry URL or vuln advisory)
                     KeyCode::Char('o') => {
