@@ -7,6 +7,7 @@ use crate::sbom::{
 use crate::theme::Theme;
 use ratatui::layout::Rect;
 use ratatui::widgets::TableState;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -232,6 +233,8 @@ pub struct ClickAreas {
     pub json_body: Option<Rect>,
     /// Area of the component JSON modal body (rows)
     pub comp_json_body: Option<Rect>,
+    /// Area of the component paths modal body (rows)
+    pub comp_paths_body: Option<Rect>,
     /// Area of the vulnerability table body
     pub vuln_body: Option<Rect>,
     /// Panel title bars that act as tab switches: (area, Tab)
@@ -292,6 +295,12 @@ pub struct App {
     pub comp_json_scroll: usize,
     pub comp_json_status: Option<String>,
 
+    // Component paths overlay
+    pub comp_paths_active: bool,
+    pub comp_paths_lines: Vec<String>,
+    pub comp_paths_selected: usize,
+    pub comp_paths_scroll: usize,
+
     /// Areas saved after each draw for mouse click handling.
     pub click_areas: ClickAreas,
 
@@ -343,6 +352,10 @@ impl App {
             comp_json_selected: 0,
             comp_json_scroll: 0,
             comp_json_status: None,
+            comp_paths_active: false,
+            comp_paths_lines: vec![],
+            comp_paths_selected: 0,
+            comp_paths_scroll: 0,
             click_areas: ClickAreas::default(),
             should_quit: false,
         };
@@ -921,6 +934,128 @@ impl App {
         self.comp_json_status = status;
     }
 
+    pub fn comp_paths_len(&self) -> usize {
+        self.comp_paths_lines.len()
+    }
+
+    pub fn open_comp_paths(&mut self) {
+        let bom_ref = match self.selected_bom_ref() {
+            Some(r) => r.to_string(),
+            None => return,
+        };
+
+        let mut to_paths: Vec<Vec<String>> = Vec::new();
+        let mut from_paths: Vec<Vec<String>> = Vec::new();
+        let max_paths = 400usize;
+
+        collect_paths_to_target(
+            &self.sbom.reverse_deps,
+            &bom_ref,
+            vec![bom_ref.clone()],
+            &mut to_paths,
+            max_paths,
+        );
+        collect_paths_from_source(
+            &self.sbom.dep_graph,
+            &bom_ref,
+            vec![bom_ref.clone()],
+            &mut from_paths,
+            max_paths,
+        );
+
+        let mut lines = Vec::new();
+        let selected_name = self.component_label(&bom_ref);
+        lines.push(format!("Selected: {selected_name}"));
+        lines.push(String::new());
+
+        lines.push("Paths leading to selected package:".to_string());
+        append_path_tree_lines(
+            &mut lines,
+            &to_paths,
+            &self.sbom.root_ref,
+            &self.sbom.root_name,
+            &self.sbom.root_version,
+            &self.sbom.components,
+        );
+        lines.push(String::new());
+        lines.push("Paths leading from selected package:".to_string());
+        append_path_tree_lines(
+            &mut lines,
+            &from_paths,
+            &self.sbom.root_ref,
+            &self.sbom.root_name,
+            &self.sbom.root_version,
+            &self.sbom.components,
+        );
+        if to_paths.len() >= max_paths || from_paths.len() >= max_paths {
+            lines.push(String::new());
+            lines.push(format!("(showing first {max_paths} paths per direction)"));
+        }
+
+        self.comp_paths_lines = lines;
+        self.comp_paths_selected = 0;
+        self.comp_paths_scroll = 0;
+        self.comp_paths_active = true;
+    }
+
+    pub fn close_comp_paths(&mut self) {
+        self.comp_paths_active = false;
+    }
+
+    pub fn adjust_comp_paths_scroll(&mut self, viewport_height: usize) {
+        if self.comp_paths_selected < self.comp_paths_scroll {
+            self.comp_paths_scroll = self.comp_paths_selected;
+        } else if self.comp_paths_selected >= self.comp_paths_scroll + viewport_height {
+            self.comp_paths_scroll = self.comp_paths_selected - viewport_height + 1;
+        }
+    }
+
+    pub fn comp_paths_move_up(&mut self) {
+        if self.comp_paths_selected > 0 {
+            self.comp_paths_selected -= 1;
+        }
+    }
+
+    pub fn comp_paths_move_down(&mut self) {
+        if self.comp_paths_selected + 1 < self.comp_paths_len() {
+            self.comp_paths_selected += 1;
+        }
+    }
+
+    pub fn comp_paths_page_up(&mut self, page_size: usize) {
+        self.comp_paths_selected = self.comp_paths_selected.saturating_sub(page_size);
+    }
+
+    pub fn comp_paths_page_down(&mut self, page_size: usize) {
+        let max = self.comp_paths_len().saturating_sub(1);
+        self.comp_paths_selected = (self.comp_paths_selected + page_size).min(max);
+    }
+
+    pub fn comp_paths_home(&mut self) {
+        self.comp_paths_selected = 0;
+    }
+
+    pub fn comp_paths_end(&mut self) {
+        self.comp_paths_selected = self.comp_paths_len().saturating_sub(1);
+    }
+
+    pub fn select_comp_paths_row(&mut self, row: usize) {
+        if row < self.comp_paths_len() {
+            self.comp_paths_selected = row;
+        }
+    }
+
+    fn component_label(&self, bom_ref: &str) -> String {
+        if bom_ref == self.sbom.root_ref {
+            return format!("{}@{}", self.sbom.root_name, self.sbom.root_version);
+        }
+        self.sbom
+            .components
+            .get(bom_ref)
+            .map(|c| format!("{}@{}", c.name, c.version))
+            .unwrap_or_else(|| bom_ref.to_string())
+    }
+
     pub fn adjust_comp_json_scroll(&mut self, viewport_height: usize) {
         if self.comp_json_selected < self.comp_json_scroll {
             self.comp_json_scroll = self.comp_json_selected;
@@ -1054,6 +1189,144 @@ impl App {
             self.tree_scroll_offset = self.tree_selected - viewport_height + 1;
         }
     }
+}
+
+#[derive(Default)]
+struct PathTreeNode {
+    children: BTreeMap<String, PathTreeNode>,
+}
+
+fn collect_paths_to_target(
+    reverse_deps: &std::collections::HashMap<String, Vec<String>>,
+    current: &str,
+    path: Vec<String>,
+    out: &mut Vec<Vec<String>>,
+    max_paths: usize,
+) {
+    if out.len() >= max_paths {
+        return;
+    }
+    let parents = reverse_deps.get(current).cloned().unwrap_or_default();
+    if parents.is_empty() {
+        let mut p = path.clone();
+        p.reverse();
+        out.push(p);
+        return;
+    }
+    for parent in parents {
+        if path.contains(&parent) {
+            continue;
+        }
+        let mut next = path.clone();
+        next.push(parent.clone());
+        collect_paths_to_target(reverse_deps, &parent, next, out, max_paths);
+        if out.len() >= max_paths {
+            return;
+        }
+    }
+}
+
+fn collect_paths_from_source(
+    dep_graph: &std::collections::HashMap<String, Vec<String>>,
+    current: &str,
+    path: Vec<String>,
+    out: &mut Vec<Vec<String>>,
+    max_paths: usize,
+) {
+    if out.len() >= max_paths {
+        return;
+    }
+    let children = dep_graph.get(current).cloned().unwrap_or_default();
+    if children.is_empty() {
+        out.push(path);
+        return;
+    }
+    for child in children {
+        if path.contains(&child) {
+            continue;
+        }
+        let mut next = path.clone();
+        next.push(child.clone());
+        collect_paths_from_source(dep_graph, &child, next, out, max_paths);
+        if out.len() >= max_paths {
+            return;
+        }
+    }
+}
+
+fn append_path_tree_lines(
+    lines: &mut Vec<String>,
+    paths: &[Vec<String>],
+    root_ref: &str,
+    root_name: &str,
+    root_version: &str,
+    components: &std::collections::BTreeMap<String, Component>,
+) {
+    if paths.is_empty() {
+        lines.push("  (none)".to_string());
+        return;
+    }
+
+    let mut root = PathTreeNode::default();
+    for path in paths {
+        let mut node = &mut root;
+        for part in path {
+            node = node.children.entry(part.clone()).or_default();
+        }
+    }
+
+    fn label_for(
+        bom_ref: &str,
+        root_ref: &str,
+        root_name: &str,
+        root_version: &str,
+        components: &std::collections::BTreeMap<String, Component>,
+    ) -> String {
+        if bom_ref == root_ref {
+            format!("{root_name}@{root_version}")
+        } else {
+            components
+                .get(bom_ref)
+                .map(|c| format!("{}@{}", c.name, c.version))
+                .unwrap_or_else(|| bom_ref.to_string())
+        }
+    }
+
+    fn walk(
+        prefix: &str,
+        node: &PathTreeNode,
+        lines: &mut Vec<String>,
+        root_ref: &str,
+        root_name: &str,
+        root_version: &str,
+        components: &std::collections::BTreeMap<String, Component>,
+    ) {
+        let len = node.children.len();
+        for (i, (label, child)) in node.children.iter().enumerate() {
+            let is_last = i + 1 == len;
+            let connector = if is_last { "`- " } else { "|- " };
+            lines.push(format!(
+                "{prefix}{connector}{}",
+                label_for(label, root_ref, root_name, root_version, components)
+            ));
+            let next_prefix = if is_last {
+                format!("{prefix}   ")
+            } else {
+                format!("{prefix}|  ")
+            };
+            walk(
+                &next_prefix,
+                child,
+                lines,
+                root_ref,
+                root_name,
+                root_version,
+                components,
+            );
+        }
+    }
+
+    walk("", &root, lines, root_ref, root_name, root_version, components);
 }
 
 // ---------------------------------------------------------------------------

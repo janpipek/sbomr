@@ -76,6 +76,10 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         // Modal overlay should block mouse interactions with background widgets.
         app.click_areas = ClickAreas::default();
         draw_comp_json(frame, app, frame.area(), &c);
+    } else if app.comp_paths_active {
+        // Modal overlay should block mouse interactions with background widgets.
+        app.click_areas = ClickAreas::default();
+        draw_comp_paths(frame, app, frame.area(), &c);
     }
 }
 
@@ -1220,6 +1224,75 @@ fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors)
     }
 }
 
+fn draw_comp_paths(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    let popup = centered_rect(
+        area,
+        modal_dimension(area.width, 4, 64, 150),
+        modal_dimension(area.height, 4, 16, 46),
+    );
+    let visible_height = popup.height.saturating_sub(2) as usize;
+    app.adjust_comp_paths_scroll(visible_height);
+
+    let body_y = popup.y + 1;
+    let body_height = popup.height.saturating_sub(2);
+    app.click_areas.comp_paths_body = Some(Rect::new(popup.x, body_y, popup.width, body_height));
+
+    let start = app.comp_paths_scroll;
+    let end = (start + visible_height).min(app.comp_paths_len());
+
+    let lines: Vec<Line> = app.comp_paths_lines[start..end]
+        .iter()
+        .enumerate()
+        .map(|(vi, line)| {
+            let is_selected = start + vi == app.comp_paths_selected;
+            let result = Line::from(Span::styled(line.clone(), Style::default().fg(c.text)));
+            if is_selected {
+                result.style(
+                    Style::default()
+                        .bg(c.bg_highlight)
+                        .fg(c.text_bright)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                result
+            }
+        })
+        .collect();
+
+    let first = start + 1;
+    let last = end;
+    let total = app.comp_paths_len();
+    let title = format!(" Dependency Paths  lines {first}-{last} / {total}  p/Esc close ");
+
+    frame.render_widget(
+        Block::default().style(Style::default().bg(c.bg_surface_alt)),
+        area,
+    );
+    frame.render_widget(Clear, popup);
+    let paragraph = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(c.border_active))
+            .title(title)
+            .title_style(Style::default().fg(c.accent).bold()),
+    );
+    frame.render_widget(paragraph, popup);
+
+    if app.comp_paths_len() > visible_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(app.comp_paths_len()).position(app.comp_paths_scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("▲"))
+                .end_symbol(Some("▼"))
+                .track_style(Style::default().fg(c.border))
+                .thumb_style(Style::default().fg(c.text_muted)),
+            popup,
+            &mut scrollbar_state,
+        );
+    }
+}
+
 fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     let width = width.min(area.width);
     let height = height.min(area.height);
@@ -1567,6 +1640,25 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         );
         return;
     }
+    if app.comp_paths_active {
+        let spans = vec![
+            Span::styled(" Esc ", key_style),
+            Span::styled(" Close  ", sep),
+            Span::styled(" ↑↓ ", key_style),
+            Span::styled(" Navigate  ", sep),
+            Span::styled(" PgUp/PgDn ", key_style),
+            Span::styled(" Scroll  ", sep),
+            Span::styled(" g/G ", key_style),
+            Span::styled(" Top/Bottom  ", sep),
+            Span::styled(" p ", key_style),
+            Span::styled(" Toggle modal  ", sep),
+        ];
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(c.bg_surface_alt)),
+            area,
+        );
+        return;
+    }
 
     let mut spans = vec![
         Span::styled(" q ", key_style),
@@ -1584,6 +1676,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         spans.extend([
             Span::styled(" v ", key_style),
             Span::styled(" View JSON  ", sep),
+            Span::styled(" p ", key_style),
+            Span::styled(" View Paths  ", sep),
         ]);
     }
     if app.active_tab == Tab::Table {

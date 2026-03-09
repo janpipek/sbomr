@@ -83,6 +83,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | Key | Action |
 |---|---|
 | `v` | Open selected package in Component JSON overlay (expanded) |
+| `p` | Open selected package dependency paths modal (incoming + outgoing trees) |
 
 ### Dependency List
 
@@ -133,6 +134,16 @@ npx @cyclonedx/cdxgen -o bom.json
 | `l` / `→`, `h` / `←` | Expand / collapse |
 | `e` / `c` | Expand all / collapse all |
 | `y` | Copy selected package JSON to clipboard |
+| `t` | Toggle theme |
+
+### Dependency paths modal (opened with `p`)
+
+| Key | Action |
+|---|---|
+| `p` / `Esc` / `q` | Close modal |
+| `j` / `↓`, `k` / `↑` | Move down / up |
+| `PgUp` / `PgDn` | Page up / down |
+| `g` / `Home`, `G` / `End` | Top / bottom |
 | `t` | Toggle theme |
 
 ### Mouse

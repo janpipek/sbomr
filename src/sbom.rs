@@ -1220,9 +1220,16 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
             DepType::Optional
         } else if !all_child_refs.contains(bom_ref) {
             // Not a direct dep, not dev, not scoped optional, and not a
-            // transitive child of any other component — this is an optional
-            // extra (e.g. from [project.optional-dependencies]).
-            DepType::Optional
+            // transitive child of any other component.
+            //
+            // If scope is unknown, keep it unknown (later shown as "(unknown)")
+            // instead of forcing Optional.
+            if comp.scope == "unknown" {
+                DepType::Transitive
+            } else {
+                // Keep the existing optional-extra heuristic for known scopes.
+                DepType::Optional
+            }
         } else {
             DepType::Transitive
         };

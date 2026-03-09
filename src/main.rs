@@ -173,6 +173,24 @@ fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
     let col = mouse.column;
     let row = mouse.row;
 
+    // Paths modal overlay captures all mouse input while active.
+    if app.comp_paths_active {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(body) = app.click_areas.comp_paths_body
+                    && in_rect(col, row, body)
+                {
+                    let clicked_row = (row - body.y) as usize + app.comp_paths_scroll;
+                    app.select_comp_paths_row(clicked_row);
+                }
+            }
+            MouseEventKind::ScrollUp => app.comp_paths_move_up(),
+            MouseEventKind::ScrollDown => app.comp_paths_move_down(),
+            _ => {}
+        }
+        return;
+    }
+
     // Modal overlay captures all mouse input while active.
     if app.comp_json_active {
         match mouse.kind {
@@ -304,6 +322,24 @@ fn run_loop(
                         KeyCode::Esc => app.filter_input_cancel(),
                         KeyCode::Backspace => app.filter_input_backspace(),
                         KeyCode::Char(ch) => app.filter_input_char(ch),
+                        _ => {}
+                    }
+                    continue;
+                }
+
+                // Component JSON overlay captures most keys when active
+                if app.comp_paths_active {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('p') => {
+                            app.close_comp_paths()
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => app.comp_paths_move_up(),
+                        KeyCode::Down | KeyCode::Char('j') => app.comp_paths_move_down(),
+                        KeyCode::PageUp => app.comp_paths_page_up(10),
+                        KeyCode::PageDown => app.comp_paths_page_down(10),
+                        KeyCode::Home | KeyCode::Char('g') => app.comp_paths_home(),
+                        KeyCode::End | KeyCode::Char('G') => app.comp_paths_end(),
+                        KeyCode::Char('t') => app.toggle_theme(),
                         _ => {}
                     }
                     continue;
@@ -442,6 +478,10 @@ fn run_loop(
                     // Open component JSON viewer
                     KeyCode::Char('v') => {
                         app.open_comp_json();
+                    }
+                    // Open dependency paths modal
+                    KeyCode::Char('p') => {
+                        app.open_comp_paths();
                     }
                     // Open URL in browser (registry URL or vuln advisory)
                     KeyCode::Char('o') => {
