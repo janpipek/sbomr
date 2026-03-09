@@ -202,11 +202,16 @@ pub enum DepType {
 
 impl DepType {
     /// Human-readable label (inferred by the viewer, not from the SBOM).
-    pub fn label(&self) -> String {
+    pub fn label(&self, is_direct: bool) -> String {
         match self {
-            DepType::Required => "required".into(),
-            DepType::Dev(group) => format!("dev: {group}"),
-            DepType::Optional => "optional".into(),
+            DepType::Required | DepType::Optional => "direct".into(),
+            DepType::Dev(_) => {
+                if is_direct {
+                    "direct(dev)".into()
+                } else {
+                    "transitive(dev)".into()
+                }
+            }
             DepType::Transitive => "transitive".into(),
         }
     }
@@ -407,6 +412,7 @@ impl Component {
 ///   pkg:swift/HOST/OWNER/REPO@V -> https://HOST/OWNER/REPO (tag VER)
 ///   pkg:hackage/NAME@VER        -> https://hackage.haskell.org/package/NAME-VER
 ///   pkg:cran/NAME@VER           -> https://cran.r-project.org/package=NAME
+///   pkg:github/OWNER/REPO@REF   -> https://github.com/OWNER/REPO
 fn purl_to_url(purl: &str) -> Option<String> {
     // purl format: pkg:TYPE/[NAMESPACE/]NAME@VERSION[?qualifiers][#subpath]
     let purl = purl.strip_prefix("pkg:")?;
@@ -498,6 +504,12 @@ fn purl_to_url(purl: &str) -> Option<String> {
         "swift" => {
             // Swift purl: pkg:swift/github.com/owner/repo@version
             Some(format!("https://{path_decoded}"))
+        }
+        "github" => {
+            // GitHub purl: pkg:github/owner/repo[@ref]
+            // Refs may be branch, tag, commit, or non-canonical identifiers,
+            // so prefer the stable repository root URL.
+            Some(format!("https://github.com/{path_decoded}"))
         }
         "hackage" => match version {
             Some(v) => Some(format!(
@@ -1613,7 +1625,7 @@ pub fn component_to_json_value(comp: &Component) -> serde_json::Value {
         "purl": comp.purl,
         "type": comp.comp_type,
         "scope": comp.scope,
-        "dep_type": comp.dep_type.label(),
+        "dep_type": comp.dep_type.label(comp.is_direct),
         "registry": comp.registry,
         "licenses": comp.licenses,
         "description": comp.description,
@@ -1677,7 +1689,7 @@ pub fn write_csv(sbom: &SBOMData, writer: &mut dyn std::io::Write) -> std::io::R
             &comp.comp_type
         };
         let license = comp.license_str();
-        let dep_type = comp.dep_type.label();
+        let dep_type = comp.dep_type.label(comp.is_direct);
 
         writeln!(
             writer,
@@ -1831,6 +1843,22 @@ mod tests {
         assert_eq!(
             purl_to_url("pkg:swift/github.com/apple/swift-nio@2.50.0"),
             Some("https://github.com/apple/swift-nio".into())
+        );
+    }
+
+    #[test]
+    fn purl_github_with_ref() {
+        assert_eq!(
+            purl_to_url("pkg:github/elasota/convectionkernels@2022-06-08"),
+            Some("https://github.com/elasota/convectionkernels".into())
+        );
+    }
+
+    #[test]
+    fn purl_github_no_ref() {
+        assert_eq!(
+            purl_to_url("pkg:github/elasota/convectionkernels"),
+            Some("https://github.com/elasota/convectionkernels".into())
         );
     }
 

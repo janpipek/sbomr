@@ -242,6 +242,8 @@ fn sort_header_cell(label: &str, col: SortColumn, app: &App) -> Cell<'static> {
 }
 
 fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
+    const NAME_COL_WIDTH: u16 = 28;
+
     let header = Row::new(vec![
         sort_header_cell("Name", SortColumn::Name, app),
         sort_header_cell("Version", SortColumn::Version, app),
@@ -275,16 +277,20 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
                 c.bg_surface
             };
 
+            let has_vuln = comp.vuln_count() > 0;
+            let name_max_len =
+                usize::from(NAME_COL_WIDTH).saturating_sub(if has_vuln { 2 } else { 0 });
+            let display_name = truncate(&comp.name, name_max_len);
             Row::new(vec![
-                Cell::from(Line::from(if comp.vuln_count() > 0 {
+                Cell::from(Line::from(if has_vuln {
                     let sev = comp.max_severity().unwrap_or(VulnSeverity::Unknown);
                     let sev_color = severity_color(sev, c);
                     vec![
-                        Span::styled(&comp.name, Style::default().fg(c.text)),
+                        Span::styled(display_name.clone(), Style::default().fg(c.text)),
                         Span::styled(" !", Style::default().fg(sev_color).bold()),
                     ]
                 } else {
-                    vec![Span::styled(&comp.name, Style::default().fg(c.text))]
+                    vec![Span::styled(display_name, Style::default().fg(c.text))]
                 })),
                 Cell::from(Line::from(if comp.is_outdated() {
                     vec![
@@ -311,8 +317,8 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
                 .style(Style::default().fg(c.text_muted)),
                 Cell::from(comp.license_str()).style(license_style),
                 Cell::from(comp.scope.clone()).style(Style::default().fg(c.text_muted)),
-                Cell::from(comp.dep_type.label())
-                    .style(Style::default().fg(dep_type_color(&comp.dep_type, c))),
+                Cell::from(comp.dep_type.label(comp.is_direct))
+                    .style(Style::default().fg(dep_type_color(c))),
                 Cell::from(truncate(&comp.description, 50))
                     .style(Style::default().fg(c.text_muted)),
             ])
@@ -321,7 +327,7 @@ fn draw_table(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
         .collect();
 
     let widths = [
-        Constraint::Length(22), // Name
+        Constraint::Length(NAME_COL_WIDTH), // Name
         Constraint::Length(10), // Version
         Constraint::Length(10), // Registry
         Constraint::Length(14), // Type
@@ -1305,7 +1311,7 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
                     Style::default().fg(c.color_warning).bold(),
                 ));
             }
-            let type_color = dep_type_color(&comp.dep_type, c);
+            let type_color = dep_type_color(c);
             line1.extend([
                 Span::styled("  │  ", Style::default().fg(c.border)),
                 Span::styled("Type ", Style::default().fg(c.text_muted)),
@@ -1323,7 +1329,7 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
                 Span::styled("  │  ", Style::default().fg(c.border)),
                 Span::styled("Dep Type ", Style::default().fg(c.text_muted)),
                 Span::styled(
-                    comp.dep_type.label(),
+                    comp.dep_type.label(comp.is_direct),
                     Style::default().fg(type_color).bold(),
                 ),
                 Span::styled("  │  ", Style::default().fg(c.border)),
@@ -1404,23 +1410,23 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
                 line2_spans.push(Span::styled("", Style::default()));
             }
 
-            // Line 3: purl, VCS or registry URL
+            // Line 3: purl + package URL (preferred) or VCS URL fallback
             let mut line3_spans = vec![Span::styled(
                 format!("purl: {}", comp.purl),
                 Style::default().fg(c.text_muted).italic(),
             )];
-            if !comp.vcs_url.is_empty() {
+            if let Some(url) = comp.registry_url() {
                 line3_spans.push(Span::styled("    ", Style::default()));
                 line3_spans.push(Span::styled(
-                    &comp.vcs_url,
+                    url,
                     Style::default()
                         .fg(c.accent)
                         .add_modifier(Modifier::UNDERLINED),
                 ));
-            } else if let Some(url) = comp.registry_url() {
+            } else if !comp.vcs_url.is_empty() {
                 line3_spans.push(Span::styled("    ", Style::default()));
                 line3_spans.push(Span::styled(
-                    url,
+                    &comp.vcs_url,
                     Style::default()
                         .fg(c.accent)
                         .add_modifier(Modifier::UNDERLINED),
@@ -1515,6 +1521,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         spans.extend([
             Span::styled(" v ", key_style),
             Span::styled(" View JSON  ", sep),
+            Span::styled(" J ", key_style),
+            Span::styled(" Jump in JSON  ", sep),
         ]);
     }
     if app.active_tab == Tab::Table {
@@ -1581,13 +1589,8 @@ fn severity_color(sev: VulnSeverity, c: &ThemeColors) -> Color {
     }
 }
 
-fn dep_type_color(dt: &DepType, c: &ThemeColors) -> Color {
-    match dt {
-        DepType::Required => c.color_required,
-        DepType::Dev(_) => c.color_dev,
-        DepType::Optional => c.color_optional,
-        DepType::Transitive => c.text_muted,
-    }
+fn dep_type_color(c: &ThemeColors) -> Color {
+    c.text
 }
 
 fn category_color(label: &str, c: &ThemeColors) -> Color {
@@ -1632,9 +1635,13 @@ fn resolve_widths(constraints: &[Constraint], available: u16) -> Vec<u16> {
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len])
-    } else {
-        s.to_string()
+    if s.chars().count() <= max_len {
+        return s.to_string();
     }
+    if max_len <= 3 {
+        return ".".repeat(max_len);
+    }
+    let kept = max_len - 3;
+    let prefix: String = s.chars().take(kept).collect();
+    format!("{prefix}...")
 }

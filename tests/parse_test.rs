@@ -358,7 +358,7 @@ fn csv_npm_field_values() {
     assert_eq!(fields[3], "library");
     assert_eq!(fields[4], "ISC");
     assert_eq!(fields[5], "required");
-    assert_eq!(fields[6], "required");
+    assert_eq!(fields[6], "direct");
     // field[7] is the description
     assert!(!fields[7].is_empty(), "description should not be empty");
 }

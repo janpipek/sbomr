@@ -24,17 +24,24 @@ Defaults to `bom.json` in the current directory if no path is given.
 sbomr --help
 ```
 
+### CLI options
+
+- `sbomr [path/to/bom.json]` -- open SBOM in the TUI (defaults to `bom.json`)
+- `sbomr --theme dark|light` -- force a theme instead of auto-detect
+- `sbomr --csv path/to/output.csv` -- export component table as CSV and exit
+
 ## Features
 
 - **Dependency List** -- sortable, filterable columns: Name, Version, Registry, Type, License, Scope, Dep Type, Description
 - **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; starts partially collapsed
+- **Vulnerabilities tab** -- sortable-by-severity view with CVSS score/method, affected packages, CWEs, published date, recommendation snippet, and advisory links
 - **Metadata tab** -- SBOM provenance (spec version, serial number, timestamp, tool, lifecycle phase) and component statistics (outdated, no-license, copyleft, vulnerable counts)
-- **JSON tab** -- collapsible tree viewer for the raw SBOM JSON with syntax highlighting; starts expanded to the first level
-- **Detail panel** -- enriched 4-line display: version with outdated indicator (`→ latest`), license with copyleft warning, vulnerability count, confidence score, description, reverse dependencies, purl, VCS/registry URL, and full hash digest
+- **JSON tab** -- collapsible tree viewer for raw SBOM JSON with syntax highlighting; supports jumping to the currently selected package definition from Table/Tree (`J`)
+- **Component JSON overlay** -- focused JSON viewer for the selected package (`v`), with independent navigation and expand/collapse controls
+- **Detail panel** -- enriched 4-line display: version with outdated indicator (`→ latest`), license with copyleft warning, vulnerability count, confidence score, description, reverse dependencies, purl, package URL (or VCS fallback), and full hash digest
 - **Summary bar** -- at-a-glance counts: total, direct, transitive, outdated, no-license, vulnerable
 - **Security insights** -- outdated detection via `cdx:cargo:latest_version` (with `↑` indicator in table), vulnerability tracking, SHA hash display, evidence confidence scores
 - **Light and dark themes** -- auto-detects terminal background at startup; press `t` to toggle
-- **Colour-coded dependency types** -- green (required), amber (dev), purple (optional), muted (transitive)
 - **Missing license highlighting** -- red italic for components with no declared license
 - **Sorting** -- cycle through Name, Version, Registry, Type, License, or Scope columns; toggle ascending/descending
 - **Filtering** -- case-insensitive text search against Name, License, Scope, or Type with a dedicated input mode
@@ -71,6 +78,13 @@ npx @cyclonedx/cdxgen -o bom.json
 | `o` | Open selected package's registry page in browser |
 | `t` | Toggle light / dark theme |
 
+### Dependency List / Tree
+
+| Key | Action |
+|---|---|
+| `v` | Open selected package in Component JSON overlay |
+| `J` | Jump to selected package definition in full JSON tab (auto-expands path and package subtree) |
+
 ### Dependency List
 
 | Key | Action |
@@ -92,6 +106,12 @@ npx @cyclonedx/cdxgen -o bom.json
 | `c` | Collapse all |
 | `g` | Cycle tree grouping (dependency type / source file) |
 
+### Vulnerabilities
+
+| Key | Action |
+|---|---|
+| `o` | Open selected vulnerability advisory URL in browser |
+
 ### JSON
 
 | Key | Action |
@@ -101,6 +121,19 @@ npx @cyclonedx/cdxgen -o bom.json
 | `h` / `←` | Collapse node |
 | `e` | Expand all |
 | `c` | Collapse all |
+
+### Component JSON overlay (opened with `v`)
+
+| Key | Action |
+|---|---|
+| `q` / `Esc` / `v` | Close overlay |
+| `j` / `↓`, `k` / `↑` | Move down / up |
+| `PgUp` / `PgDn` | Page up / down |
+| `g` / `Home`, `G` / `End` | Top / bottom |
+| `Enter` / `Space` | Toggle expand / collapse |
+| `l` / `→`, `h` / `←` | Expand / collapse |
+| `e` / `c` | Expand all / collapse all |
+| `t` | Toggle theme |
 
 ### Mouse
 

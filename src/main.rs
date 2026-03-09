@@ -360,6 +360,12 @@ fn run_loop(
                     KeyCode::Char('v') => {
                         app.open_comp_json();
                     }
+                    // Jump to selected package in full JSON (and expand it)
+                    KeyCode::Char('J') => {
+                        if matches!(app.active_tab, app::Tab::Table | app::Tab::Tree) {
+                            let _ = app.jump_to_selected_component_json(true);
+                        }
+                    }
                     // Open URL in browser (registry URL or vuln advisory)
                     KeyCode::Char('o') => {
                         if app.active_tab == app::Tab::Vulns {
