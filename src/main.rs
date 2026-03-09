@@ -1,5 +1,6 @@
-use std::io;
+use std::io::{self, Write};
 use std::path::PathBuf;
+use std::process::{Command, ExitStatus, Stdio};
 
 use clap::Parser;
 use color_eyre::Result;
@@ -126,6 +127,43 @@ fn open_url(url: &str) -> std::io::Result<std::process::ExitStatus> {
     }
 }
 
+fn run_clip_command(program: &str, args: &[&str], text: &str) -> io::Result<ExitStatus> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::piped())
+        .spawn()?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin.write_all(text.as_bytes())?;
+    }
+    child.wait()
+}
+
+/// Copy text to the system clipboard.
+fn copy_to_clipboard(text: &str) -> io::Result<ExitStatus> {
+    #[cfg(target_os = "macos")]
+    {
+        run_clip_command("pbcopy", &[], text)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Try Wayland first, then X11 tools.
+        run_clip_command("wl-copy", &[], text)
+            .or_else(|_| run_clip_command("xclip", &["-selection", "clipboard"], text))
+            .or_else(|_| run_clip_command("xsel", &["--clipboard", "--input"], text))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        run_clip_command("clip", &[], text)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "clipboard copy is unsupported on this platform",
+        ))
+    }
+}
+
 /// Check whether (col, row) falls inside `area`.
 fn in_rect(col: u16, row: u16, area: Rect) -> bool {
     col >= area.x && col < area.x + area.width && row >= area.y && row < area.y + area.height
@@ -134,6 +172,30 @@ fn in_rect(col: u16, row: u16, area: Rect) -> bool {
 fn handle_mouse(app: &mut app::App, mouse: crossterm::event::MouseEvent) {
     let col = mouse.column;
     let row = mouse.row;
+
+    // Modal overlay captures all mouse input while active.
+    if app.comp_json_active {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(body) = app.click_areas.comp_json_body
+                    && in_rect(col, row, body)
+                {
+                    let clicked_row = (row - body.y) as usize + app.comp_json_scroll;
+                    if clicked_row < app.comp_json_len() {
+                        if clicked_row == app.comp_json_selected {
+                            app.toggle_comp_json_selected();
+                        } else {
+                            app.comp_json_selected = clicked_row;
+                        }
+                    }
+                }
+            }
+            MouseEventKind::ScrollUp => app.comp_json_move_up(),
+            MouseEventKind::ScrollDown => app.comp_json_move_down(),
+            _ => {}
+        }
+        return;
+    }
 
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
@@ -253,6 +315,27 @@ fn run_loop(
                         KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char('v') => {
                             app.close_comp_json()
                         }
+                        KeyCode::Char('y') => {
+                            if let Some(json) = app.selected_component_json_pretty() {
+                                match copy_to_clipboard(&json) {
+                                    Ok(status) if status.success() => {
+                                        app.set_comp_json_status(Some("Copied JSON".to_string()));
+                                    }
+                                    Ok(_) => {
+                                        app.set_comp_json_status(Some(
+                                            "Copy failed (clipboard command error)".to_string(),
+                                        ));
+                                    }
+                                    Err(_) => {
+                                        app.set_comp_json_status(Some(
+                                            "Copy failed (no clipboard tool?)".to_string(),
+                                        ));
+                                    }
+                                }
+                            } else {
+                                app.set_comp_json_status(Some("Copy failed".to_string()));
+                            }
+                        }
                         KeyCode::Up | KeyCode::Char('k') => app.comp_json_move_up(),
                         KeyCode::Down | KeyCode::Char('j') => app.comp_json_move_down(),
                         KeyCode::PageUp => app.comp_json_page_up(10),
@@ -359,12 +442,6 @@ fn run_loop(
                     // Open component JSON viewer
                     KeyCode::Char('v') => {
                         app.open_comp_json();
-                    }
-                    // Jump to selected package in full JSON (and expand it)
-                    KeyCode::Char('J') => {
-                        if matches!(app.active_tab, app::Tab::Table | app::Tab::Tree) {
-                            let _ = app.jump_to_selected_component_json(true);
-                        }
                     }
                     // Open URL in browser (registry URL or vuln advisory)
                     KeyCode::Char('o') => {

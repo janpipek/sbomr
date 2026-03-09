@@ -7,7 +7,7 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        Block, Borders, Cell, Clear, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, Tabs,
     },
     Frame,
@@ -59,22 +59,24 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         draw_filter_bar(frame, app, filter_area, &c);
     }
 
-    if app.comp_json_active {
-        draw_comp_json(frame, app, main_area, &c);
-    } else {
-        match app.active_tab {
-            Tab::Table => draw_table(frame, app, main_area, &c),
-            Tab::Tree => draw_tree(frame, app, main_area, &c),
-            Tab::Vulns => draw_vulns(frame, app, main_area, &c),
-            Tab::Metadata => draw_metadata(frame, app, main_area, &c),
-            Tab::Json => draw_json(frame, app, main_area, &c),
-        }
+    match app.active_tab {
+        Tab::Table => draw_table(frame, app, main_area, &c),
+        Tab::Tree => draw_tree(frame, app, main_area, &c),
+        Tab::Vulns => draw_vulns(frame, app, main_area, &c),
+        Tab::Metadata => draw_metadata(frame, app, main_area, &c),
+        Tab::Json => draw_json(frame, app, main_area, &c),
     }
 
     if detail_height > 0 {
         draw_detail(frame, app, detail_area, &c);
     }
     draw_footer(frame, app, footer_area, &c);
+
+    if app.comp_json_active {
+        // Modal overlay should block mouse interactions with background widgets.
+        app.click_areas = ClickAreas::default();
+        draw_comp_json(frame, app, frame.area(), &c);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1138,8 +1140,18 @@ fn draw_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
 // ---------------------------------------------------------------------------
 
 fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors) {
-    let visible_height = area.height.saturating_sub(2) as usize;
+    let popup = centered_rect(
+        area,
+        modal_dimension(area.width, 4, 56, 140),
+        modal_dimension(area.height, 6, 14, 42),
+    );
+    let visible_height = popup.height.saturating_sub(2) as usize;
     app.adjust_comp_json_scroll(visible_height);
+
+    // Record modal body area for mouse clicks.
+    let body_y = popup.y + 1;
+    let body_height = popup.height.saturating_sub(2);
+    app.click_areas.comp_json_body = Some(Rect::new(popup.x, body_y, popup.width, body_height));
 
     let start = app.comp_json_scroll;
     let end = (start + visible_height).min(app.comp_json_len());
@@ -1173,7 +1185,17 @@ fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors)
     let first = start + 1;
     let last = end;
     let total = app.comp_json_len();
-    let title = format!(" {comp_name}  lines {first}-{last} / {total}  Esc to close ");
+    let mut title = format!(" {comp_name}  lines {first}-{last} / {total}  y copy  Esc/q/v close ");
+    if let Some(status) = &app.comp_json_status {
+        title.push_str(&format!("  |  {status}"));
+    }
+
+    // Dim the background area, then render a centered modal dialog.
+    frame.render_widget(
+        Block::default().style(Style::default().bg(c.bg_surface_alt)),
+        area,
+    );
+    frame.render_widget(Clear, popup);
     let paragraph = Paragraph::new(lines).block(
         Block::default()
             .borders(Borders::ALL)
@@ -1181,7 +1203,7 @@ fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors)
             .title(title)
             .title_style(Style::default().fg(c.accent).bold()),
     );
-    frame.render_widget(paragraph, area);
+    frame.render_widget(paragraph, popup);
 
     if app.comp_json_len() > visible_height {
         let mut scrollbar_state =
@@ -1192,9 +1214,26 @@ fn draw_comp_json(frame: &mut Frame, app: &mut App, area: Rect, c: &ThemeColors)
                 .end_symbol(Some("▼"))
                 .track_style(Style::default().fg(c.border))
                 .thumb_style(Style::default().fg(c.text_muted)),
-            area,
+            popup,
             &mut scrollbar_state,
         );
+    }
+}
+
+fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
+    let width = width.min(area.width);
+    let height = height.min(area.height);
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    Rect::new(x, y, width, height)
+}
+
+fn modal_dimension(total: u16, margin: u16, min_dim: u16, max_dim: u16) -> u16 {
+    let available = total.saturating_sub(margin);
+    if available <= min_dim {
+        available
+    } else {
+        available.min(max_dim)
     }
 }
 
@@ -1505,6 +1544,30 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         return;
     }
 
+    if app.comp_json_active {
+        let spans = vec![
+            Span::styled(" Esc ", key_style),
+            Span::styled(" Close  ", sep),
+            Span::styled(" ↑↓ ", key_style),
+            Span::styled(" Navigate  ", sep),
+            Span::styled(" Enter ", key_style),
+            Span::styled(" Toggle  ", sep),
+            Span::styled(" ←→ ", key_style),
+            Span::styled(" Collapse/Expand  ", sep),
+            Span::styled(" y ", key_style),
+            Span::styled(" Copy JSON  ", sep),
+            Span::styled(" e/c ", key_style),
+            Span::styled(" Expand/Collapse all  ", sep),
+            Span::styled(" t ", key_style),
+            Span::styled(" Dark/Light  ", sep),
+        ];
+        frame.render_widget(
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(c.bg_surface_alt)),
+            area,
+        );
+        return;
+    }
+
     let mut spans = vec![
         Span::styled(" q ", key_style),
         Span::styled(" Quit  ", sep),
@@ -1521,8 +1584,6 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect, c: &ThemeColors) {
         spans.extend([
             Span::styled(" v ", key_style),
             Span::styled(" View JSON  ", sep),
-            Span::styled(" J ", key_style),
-            Span::styled(" Jump in JSON  ", sep),
         ]);
     }
     if app.active_tab == Tab::Table {

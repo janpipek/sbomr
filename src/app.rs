@@ -230,6 +230,8 @@ pub struct ClickAreas {
     pub tree_body: Option<Rect>,
     /// Area of the JSON viewer body (rows)
     pub json_body: Option<Rect>,
+    /// Area of the component JSON modal body (rows)
+    pub comp_json_body: Option<Rect>,
     /// Area of the vulnerability table body
     pub vuln_body: Option<Rect>,
     /// Panel title bars that act as tab switches: (area, Tab)
@@ -288,6 +290,7 @@ pub struct App {
     pub comp_json_flat: Vec<FlatJsonLine>,
     pub comp_json_selected: usize,
     pub comp_json_scroll: usize,
+    pub comp_json_status: Option<String>,
 
     /// Areas saved after each draw for mouse click handling.
     pub click_areas: ClickAreas,
@@ -339,6 +342,7 @@ impl App {
             comp_json_flat: vec![],
             comp_json_selected: 0,
             comp_json_scroll: 0,
+            comp_json_status: None,
             click_areas: ClickAreas::default(),
             should_quit: false,
         };
@@ -858,28 +862,6 @@ impl App {
         self.json_selected = self.json_selected.min(self.json_len().saturating_sub(1));
     }
 
-    /// Jump to the selected package definition in the full JSON viewer.
-    ///
-    /// Returns `true` when a matching component is found and selected.
-    pub fn jump_to_selected_component_json(&mut self, expand_subtree: bool) -> bool {
-        let bom_ref = match self.selected_bom_ref() {
-            Some(r) => r.to_string(),
-            None => return false,
-        };
-        let path = match Self::find_component_path_in_json(&self.json_root, &bom_ref) {
-            Some(p) => p,
-            None => return false,
-        };
-
-        Self::expand_json_path(&mut self.json_root, &path, expand_subtree);
-        self.rebuild_flat_json();
-        if let Some(idx) = self.flat_json.iter().position(|l| l.path == path) {
-            self.json_selected = idx;
-        }
-        self.active_tab = Tab::Json;
-        true
-    }
-
     fn rebuild_flat_json(&mut self) {
         self.flat_json = flatten_json(&self.json_root);
         if self.json_selected >= self.flat_json.len() {
@@ -902,16 +884,41 @@ impl App {
             Some(c) => c,
             None => return,
         };
-        let value = crate::sbom::component_to_json_value(comp);
+        let value = self
+            .sbom
+            .original_component_json
+            .get(&bom_ref)
+            .cloned()
+            .unwrap_or_else(|| crate::sbom::component_to_json_value(comp));
         self.comp_json_root = crate::sbom::build_json_tree(&value);
+        Self::set_json_expanded_recursive(&mut self.comp_json_root, true);
         self.comp_json_flat = flatten_json(&self.comp_json_root);
         self.comp_json_selected = 0;
         self.comp_json_scroll = 0;
+        self.comp_json_status = None;
         self.comp_json_active = true;
+    }
+
+    /// Pretty JSON for the currently selected component.
+    pub fn selected_component_json_pretty(&self) -> Option<String> {
+        let bom_ref = self.selected_bom_ref()?;
+        let comp = self.sbom.components.get(bom_ref)?;
+        let value = self
+            .sbom
+            .original_component_json
+            .get(bom_ref)
+            .cloned()
+            .unwrap_or_else(|| crate::sbom::component_to_json_value(comp));
+        serde_json::to_string_pretty(&value).ok()
     }
 
     pub fn close_comp_json(&mut self) {
         self.comp_json_active = false;
+        self.comp_json_status = None;
+    }
+
+    pub fn set_comp_json_status(&mut self, status: Option<String>) {
+        self.comp_json_status = status;
     }
 
     pub fn adjust_comp_json_scroll(&mut self, viewport_height: usize) {
@@ -1045,88 +1052,6 @@ impl App {
             self.tree_scroll_offset = self.tree_selected;
         } else if self.tree_selected >= self.tree_scroll_offset + viewport_height {
             self.tree_scroll_offset = self.tree_selected - viewport_height + 1;
-        }
-    }
-
-    fn find_component_path_in_json(root: &JsonNode, bom_ref: &str) -> Option<Vec<usize>> {
-        fn walk(node: &JsonNode, path: &mut Vec<usize>, bom_ref: &str) -> Option<Vec<usize>> {
-            if matches!(node.kind, JsonNodeKind::Object)
-                && let Some(components_idx) = node
-                    .children
-                    .iter()
-                    .position(|c| c.key.as_deref() == Some("components"))
-                && let Some(components_node) = node.children.get(components_idx)
-                && matches!(components_node.kind, JsonNodeKind::Array)
-            {
-                for (child_idx, child) in components_node.children.iter().enumerate() {
-                    if App::json_object_matches_component_ref(child, bom_ref) {
-                        let mut found = path.clone();
-                        found.push(components_idx);
-                        found.push(child_idx);
-                        return Some(found);
-                    }
-                }
-            }
-
-            for (i, child) in node.children.iter().enumerate() {
-                path.push(i);
-                if let Some(found) = walk(child, path, bom_ref) {
-                    return Some(found);
-                }
-                path.pop();
-            }
-            None
-        }
-
-        walk(root, &mut Vec::new(), bom_ref)
-    }
-
-    fn json_object_matches_component_ref(node: &JsonNode, bom_ref: &str) -> bool {
-        if !matches!(node.kind, JsonNodeKind::Object) {
-            return false;
-        }
-        ["bom-ref", "purl"].iter().any(|key| {
-            node.children
-                .iter()
-                .find(|c| c.key.as_deref() == Some(*key))
-                .and_then(Self::json_leaf_string_value)
-                .is_some_and(|s| s == bom_ref)
-        })
-    }
-
-    fn json_leaf_string_value(node: &JsonNode) -> Option<&str> {
-        match &node.kind {
-            JsonNodeKind::Leaf(text) if text.len() >= 2 => text
-                .strip_prefix('"')
-                .and_then(|s| s.strip_suffix('"'))
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    if text == "\"\"" {
-                        Some("")
-                    } else {
-                        None
-                    }
-                }),
-            _ => None,
-        }
-    }
-
-    fn expand_json_path(node: &mut JsonNode, path: &[usize], expand_subtree: bool) {
-        let mut current = node;
-        for &idx in path {
-            if matches!(current.kind, JsonNodeKind::Object | JsonNodeKind::Array) {
-                current.expanded = true;
-            }
-            let Some(next) = current.children.get_mut(idx) else {
-                return;
-            };
-            current = next;
-        }
-        if matches!(current.kind, JsonNodeKind::Object | JsonNodeKind::Array) {
-            current.expanded = true;
-            if expand_subtree {
-                Self::set_json_expanded_recursive(current, true);
-            }
         }
     }
 }

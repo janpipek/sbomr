@@ -36,8 +36,8 @@ sbomr --help
 - **Dependency Tree** -- hierarchical dependency graph grouped into required, dev (by group name), and optional extras; starts partially collapsed
 - **Vulnerabilities tab** -- sortable-by-severity view with CVSS score/method, affected packages, CWEs, published date, recommendation snippet, and advisory links
 - **Metadata tab** -- SBOM provenance (spec version, serial number, timestamp, tool, lifecycle phase) and component statistics (outdated, no-license, copyleft, vulnerable counts)
-- **JSON tab** -- collapsible tree viewer for raw SBOM JSON with syntax highlighting; supports jumping to the currently selected package definition from Table/Tree (`J`)
-- **Component JSON overlay** -- focused JSON viewer for the selected package (`v`), with independent navigation and expand/collapse controls
+- **JSON tab** -- collapsible tree viewer for raw SBOM JSON with syntax highlighting
+- **Component JSON overlay** -- focused JSON viewer for the selected package (`v`), opened fully expanded with independent navigation and expand/collapse controls
 - **Detail panel** -- enriched 4-line display: version with outdated indicator (`→ latest`), license with copyleft warning, vulnerability count, confidence score, description, reverse dependencies, purl, package URL (or VCS fallback), and full hash digest
 - **Summary bar** -- at-a-glance counts: total, direct, transitive, outdated, no-license, vulnerable
 - **Security insights** -- outdated detection via `cdx:cargo:latest_version` (with `↑` indicator in table), vulnerability tracking, SHA hash display, evidence confidence scores
@@ -82,8 +82,7 @@ npx @cyclonedx/cdxgen -o bom.json
 
 | Key | Action |
 |---|---|
-| `v` | Open selected package in Component JSON overlay |
-| `J` | Jump to selected package definition in full JSON tab (auto-expands path and package subtree) |
+| `v` | Open selected package in Component JSON overlay (expanded) |
 
 ### Dependency List
 
@@ -133,6 +132,7 @@ npx @cyclonedx/cdxgen -o bom.json
 | `Enter` / `Space` | Toggle expand / collapse |
 | `l` / `→`, `h` / `←` | Expand / collapse |
 | `e` / `c` | Expand all / collapse all |
+| `y` | Copy selected package JSON to clipboard |
 | `t` | Toggle theme |
 
 ### Mouse

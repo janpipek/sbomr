@@ -563,6 +563,7 @@ pub struct SBOMData {
     pub tree_roots: Vec<TreeNode>,               // top-level tree categories
     pub metadata: SBOMMetadata,
     pub json_root: JsonNode, // collapsible JSON tree for the JSON viewer
+    pub original_component_json: BTreeMap<String, serde_json::Value>, // keyed by bom-ref (or purl fallback)
     pub vulnerabilities: Vec<Vulnerability>, // parsed vulnerability records
     // Retained for rebuilding trees with different groupings:
     pub root_direct: HashSet<String>,
@@ -792,10 +793,10 @@ fn get_property(props: &[RawProperty], name: &str) -> Option<String> {
 
 pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
     let content = fs::read_to_string(path)?;
-    // Parse into Value for the JSON viewer tree and pretty-print for copy-all
+    // Parse once as generic JSON for viewers, and once as typed data model.
     let json_value: serde_json::Value = serde_json::from_str(&content)?;
     let json_root = build_json_tree(&json_value);
-    let raw: RawBom = serde_json::from_value(json_value)?;
+    let raw: RawBom = serde_json::from_str(&content)?;
 
     // --- SBOM-level metadata ---
     let meta = raw.metadata.as_ref();
@@ -1074,6 +1075,25 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
     // Parse components (dep_type assigned in a second pass once we know all_child_refs)
     let mut components = BTreeMap::new();
     let mut dev_refs: HashSet<String> = HashSet::new();
+    let mut original_component_json: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+
+    if let Some(json_components) = json_value.get("components").and_then(|v| v.as_array()) {
+        for comp_json in json_components {
+            let Some(obj) = comp_json.as_object() else {
+                continue;
+            };
+            let bom_ref = obj
+                .get("bom-ref")
+                .and_then(|v| v.as_str())
+                .or_else(|| obj.get("purl").and_then(|v| v.as_str()))
+                .unwrap_or_default()
+                .to_string();
+            if bom_ref.is_empty() || bom_ref == root_ref || lockfile_refs.contains(&bom_ref) {
+                continue;
+            }
+            original_component_json.insert(bom_ref, comp_json.clone());
+        }
+    }
 
     for rc in &raw.components {
         let bom_ref = rc
@@ -1282,6 +1302,7 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         tree_roots,
         metadata: sbom_metadata,
         json_root,
+        original_component_json,
         vulnerabilities,
         root_direct,
         dev_refs,
