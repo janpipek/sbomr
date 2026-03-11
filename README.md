@@ -177,7 +177,7 @@ The app uses three signals from the CycloneDX SBOM to classify each component:
 `scope` remains visible as a separate field (e.g. `required`, `optional`, `(unknown)`), but is not used as a separate dep-type category.
 
 ## Development
-
+s
 ```sh
 just          # fmt + clippy + test
 just build    # release binary
@@ -185,7 +185,7 @@ just install  # cargo install --path .
 just publish  # publish to crates.io
 ```
 
-## Project structure
+### Project structure
 
 ```
 src/
@@ -195,3 +195,13 @@ src/
 ├── theme.rs   Dark/light colour palettes, OS theme detection
 └── ui.rs      Rendering, layout, syntax highlighting (theme-aware)
 ```
+
+## Alternatives
+
+### sbom-tools
+
+[`sbom-tools`](https://github.com/sbom-tool/sbom-tools) includes a `view` mode for interactive SBOM browsing, and also provides `diff`, `validate`, `quality`, `query`, and fleet-style analysis. It supports both CycloneDX and SPDX formats across multiple versions.
+
+Use `sbom-tools` when you need one CLI for viewing plus policy/compliance/reporting and CI gates.
+
+Use `sbomr` when your workflow is centered on quickly inspecting a single CycloneDX SBOM with a component-focused terminal UX and CSV export.
