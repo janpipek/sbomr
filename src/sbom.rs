@@ -194,9 +194,8 @@ struct RawAffects {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepType {
-    Required,
+    Direct,
     Dev(String), // group name, e.g. "dev", "type"
-    Optional,    // scope=optional without a group
     Transitive,
 }
 
@@ -204,7 +203,7 @@ impl DepType {
     /// Human-readable label (inferred by the viewer, not from the SBOM).
     pub fn label(&self, is_direct: bool) -> String {
         match self {
-            DepType::Required | DepType::Optional => "direct".into(),
+            DepType::Direct => "direct".into(),
             DepType::Dev(_) => {
                 if is_direct {
                     "direct(dev)".into()
@@ -1198,41 +1197,31 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         );
     }
 
-    // Second pass: classify dep_type using all_child_refs to distinguish
-    // optional extras from true transitive deps.
+    // Second pass: classify dep_type as direct/transitive/dev.
     //
     // When the dependency graph is empty (root has no dependsOn edges), we
-    // fall back to `scope` alone: required → Required, optional → Optional.
+    // cannot determine transitivity reliably; non-dev dependencies are direct.
     let graph_available = !root_direct.is_empty();
     for (bom_ref, comp) in components.iter_mut() {
         comp.dep_type = if !comp.dep_group.is_empty() {
             DepType::Dev(comp.dep_group.clone())
         } else if !graph_available {
-            // No dep graph — classify purely by scope
-            if comp.scope == "optional" {
-                DepType::Optional
-            } else {
-                DepType::Required
-            }
-        } else if comp.is_direct {
-            DepType::Required
-        } else if comp.scope == "optional" && !all_child_refs.contains(bom_ref) {
-            DepType::Optional
-        } else if !all_child_refs.contains(bom_ref) {
-            // Not a direct dep, not dev, not scoped optional, and not a
-            // transitive child of any other component.
-            //
-            // If scope is unknown, keep it unknown (later shown as "(unknown)")
-            // instead of forcing Optional.
-            if comp.scope == "unknown" {
-                DepType::Transitive
-            } else {
-                // Keep the existing optional-extra heuristic for known scopes.
-                DepType::Optional
-            }
+            DepType::Direct
+        } else if comp.is_direct || !all_child_refs.contains(bom_ref) {
+            DepType::Direct
         } else {
             DepType::Transitive
         };
+    }
+
+    // Promote top-level dev-group components to direct when they have no
+    // non-root parent in the dependency graph.
+    if graph_available {
+        for (bom_ref, comp) in components.iter_mut() {
+            if matches!(comp.dep_type, DepType::Dev(_)) && !all_child_refs.contains(bom_ref) {
+                comp.is_direct = true;
+            }
+        }
     }
 
     // When using scope fallback, also mark required-scope components as direct
@@ -1247,15 +1236,11 @@ pub fn parse_sbom(path: &Path) -> color_eyre::Result<SBOMData> {
         }
     }
 
-    // Align scope with dep_type so the two columns are consistent:
-    // - Required (direct) deps always have scope "required"
-    // - Transitive deps get scope inferred from their parent chain (reset to
-    //   "unknown" so infer_unknown_scopes propagates parent scope in parens)
+    // For transitive deps, reset scope to "unknown" so infer_unknown_scopes
+    // can derive parent scopes and display them in parens.
     if graph_available {
         for comp in components.values_mut() {
             match &comp.dep_type {
-                DepType::Required => comp.scope = "required".into(),
-                DepType::Optional => comp.scope = "optional".into(),
                 DepType::Transitive => comp.scope = "unknown".into(),
                 _ => {}
             }
@@ -1933,7 +1918,7 @@ mod tests {
             );
         }
 
-        // ratatui should be a direct (required) dependency
+        // ratatui should be a direct dependency
         let ratatui = sbom
             .components
             .values()
@@ -1941,8 +1926,8 @@ mod tests {
             .expect("ratatui not found in components");
         assert_eq!(
             ratatui.dep_type,
-            DepType::Required,
-            "ratatui should be Required, got {:?}",
+            DepType::Direct,
+            "ratatui should be Direct, got {:?}",
             ratatui.dep_type
         );
     }
@@ -1967,7 +1952,7 @@ mod tests {
             );
         }
 
-        // ratatui should be a direct (required) dependency (promoted from lock-file child)
+        // ratatui should be a direct dependency (promoted from lock-file child)
         let ratatui = sbom
             .components
             .values()

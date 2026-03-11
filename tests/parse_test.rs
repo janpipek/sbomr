@@ -215,7 +215,7 @@ fn npm_semver_is_required() {
         .find(|c| c.name == "semver")
         .expect("semver not found");
     assert_eq!(semver.version, "7.7.4");
-    assert_eq!(semver.dep_type, DepType::Required);
+    assert_eq!(semver.dep_type, DepType::Direct);
     assert!(semver.is_direct);
 }
 
@@ -224,12 +224,12 @@ fn npm_direct_deps_classified_as_required() {
     let sbom = sbom::parse_sbom(&fixture("npm-bom.json")).unwrap();
 
     // All components are direct deps of the root, so the parser classifies
-    // them as Required even if the raw SBOM scope says "optional".
+    // them as Direct even if the raw SBOM scope says "optional".
     for comp in sbom.components.values() {
         assert_eq!(
             comp.dep_type,
-            DepType::Required,
-            "{} is a direct dep and should be classified as Required, got {:?}",
+            DepType::Direct,
+            "{} is a direct dep and should be classified as Direct, got {:?}",
             comp.name,
             comp.dep_type
         );

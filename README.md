@@ -1,6 +1,6 @@
 # sbomr
 
-A terminal UI for browsing [CycloneDX](https://cyclonedx.org/) SBOM files, built with [ratatui](https://ratatui.rs/) and crossterm. Focus is on **licenses**, **dependency types** (required, dev, optional, transitive), and **security insights** (outdated packages, vulnerabilities, hashes, confidence scores).
+A terminal UI for browsing [CycloneDX](https://cyclonedx.org/) SBOM files, built with [ratatui](https://ratatui.rs/) and crossterm. Focus is on **licenses**, **dependency types** (direct, transitive, dev), and **security insights** (outdated packages, vulnerabilities, hashes, confidence scores).
 
 ## Requirements
 
@@ -170,9 +170,11 @@ npx @cyclonedx/cdxgen -o bom.json
 
 The app uses three signals from the CycloneDX SBOM to classify each component:
 
-1. **`scope`** field -- `"optional"` marks dev-group dependencies
-2. **`cdx:pyproject:group`** property -- gives the exact group name (`"dev"`, `"type"`, etc.)
-3. **Dependency graph analysis** -- a component that is not in root's `dependsOn`, has no dev group, and is not a transitive child of any other component is classified as an **optional extra** (e.g. from `[project.optional-dependencies]`)
+1. **`cdx:pyproject:group`** property -- gives a concrete dev group (`"dev"`, `"type"`, etc.), classified as `dev`
+2. **Root dependency edges** -- components directly referenced by the root are classified as `direct`
+3. **Dependency graph analysis** -- components reached through another component are classified as `transitive`
+
+`scope` remains visible as a separate field (e.g. `required`, `optional`, `(unknown)`), but is not used as a separate dep-type category.
 
 ## Development
 
